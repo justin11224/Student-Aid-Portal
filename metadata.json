@@ -1,5 +1,5 @@
 {
-  "name": "Student Aid Portal1",
+  "name": "Student Aid Portal",
   "description": "A comprehensive student portal for managing IDs, grades, schedules, financial aid, and messaging with role-based access control.",
   "requestFramePermissions": []
 }

@@ -18,6 +18,7 @@ import {
   Shield,
   ArrowLeft,
   Eye,
+  EyeOff,
   UserPlus,
   LogIn,
   Search,
@@ -37,7 +38,8 @@ import {
   LayoutDashboard,
   Camera,
   Upload,
-  Download
+  Download,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -88,6 +90,7 @@ export default function App() {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [regData, setRegData] = useState({ 
     id: '', 
     surname: '', 
@@ -106,10 +109,13 @@ export default function App() {
   const [financialAid, setFinancialAid] = useState<any[]>([]);
   const [scholarships, setScholarships] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ users: UserData[], announcements: any[], applications: any[] } | null>(null);
+  const [policies, setPolicies] = useState<any>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Fetch data
   useEffect(() => {
@@ -120,8 +126,33 @@ export default function App() {
       fetchFinancialAid();
       fetchScholarships();
       fetchRecommendations();
+      fetchNotifications();
+      fetchPolicies();
     }
   }, [user]);
+
+  const fetchPolicies = async () => {
+    const res = await fetch('/api/policies');
+    const data = await res.json();
+    setPolicies(data);
+  };
+
+  const fetchNotifications = async () => {
+    if (!user) return;
+    const res = await fetch(`/api/notifications/${user.id}`);
+    const data = await res.json();
+    setNotifications(data);
+  };
+
+  const markNotificationsRead = async () => {
+    if (!user) return;
+    await fetch('/api/notifications/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    fetchNotifications();
+  };
 
   const fetchScholarships = async () => {
     const res = await fetch('/api/scholarships');
@@ -237,9 +268,9 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         setIsRegistering(false);
-        setLoginId(regData.id);
+        setLoginId(data.id); // Use the auto-generated ID from server
         setLoginPassword(regData.password);
-        setError('Registration successful! Please login.');
+        setError(`Registration successful! Your School ID is: ${data.id}. Please login.`);
         setView('login');
       } else {
         setError(data.message);
@@ -318,13 +349,20 @@ export default function App() {
                   <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
                   <div className="relative">
                     <input 
-                      type="password" 
+                      type={showPassword ? "text" : "password"} 
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
+                      className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all pr-12"
                       placeholder="Enter your password"
                       required
                     />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-stone-400 hover:text-stone-600 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
                   </div>
                 </div>
 
@@ -391,18 +429,6 @@ export default function App() {
                       required
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">School ID Number</label>
-                  <input 
-                    type="text" 
-                    value={regData.id}
-                    onChange={(e) => setRegData({...regData, id: e.target.value})}
-                    className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
-                    placeholder="SCC-00-00000000"
-                    required
-                  />
                 </div>
 
                 <div>
@@ -554,44 +580,51 @@ export default function App() {
             {user.role === 'student' && (
               <>
                 <NavItem icon={<User />} label="My Profile" active={view === 'profile'} onClick={() => setView('profile')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarships" active={view === 'scholarships'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Award />} label="Scholarships" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Plus />} label="Apply for Aid" active={view === 'finance'} onClick={() => setView('finance')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<FileText />} label="My Applications" active={view === 'applications'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<FileText />} label="My Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<MapPin />} label="Documents" active={view === 'documents'} onClick={() => setView('documents')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Bell />} label="Notifications" active={view === 'notifications'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Bell />} label="Notifications" active={view === 'notifications'} onClick={() => setView('notifications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<MessageSquare />} label="Inquiries" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
 
             {user.role === 'faculty' && (
               <>
-                <NavItem icon={<Users />} label="Student Applications" active={view === 'applications'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<CheckCircle />} label="Recommendations" active={view === 'recommendations'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarship Info" active={view === 'scholarships'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Users />} label="Student Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<CheckCircle />} label="Recommendations" active={view === 'recommendations'} onClick={() => setView('recommendations')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Award />} label="Scholarship Info" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<TrendingUp />} label="Reports" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<MessageSquare />} label="Messages" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
 
             {user.role === 'staff' && (
               <>
-                <NavItem icon={<FileText />} label="Applications" active={view === 'applications'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<MapPin />} label="Documents" active={view === 'documents'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarships" active={view === 'scholarships'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<FileText />} label="Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<MapPin />} label="Documents" active={view === 'documents'} onClick={() => setView('documents')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Award />} label="Scholarships" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<MessageSquare />} label="Student Inquiries" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<TrendingUp />} label="Reports" active={view === 'reports'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<TrendingUp />} label="Reports" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
 
             {user.role === 'admin' && (
               <>
                 <NavItem icon={<Users />} label="User Accounts" active={view === 'admin'} onClick={() => setView('admin')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarship Programs" active={view === 'programs'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<FileText />} label="All Applications" active={view === 'applications'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<TrendingUp />} label="Reports & Analytics" active={view === 'reports'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Award />} label="Scholarship Programs" active={view === 'programs'} onClick={() => setView('programs')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<FileText />} label="All Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<MessageSquare />} label="Messages" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<TrendingUp />} label="Reports & Analytics" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Clock />} label="System Activity" active={view === 'activity'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Clock />} label="System Activity" active={view === 'activity'} onClick={() => setView('activity')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
           </nav>
@@ -650,13 +683,73 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            <button className={cn(
-              "p-3 rounded-2xl relative transition-all",
-              isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
-            )}>
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-600 rounded-full border-2 border-white dark:border-[#0A0A0A]"></span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  if (!showNotifications) markNotificationsRead();
+                }}
+                className={cn(
+                  "p-3 rounded-2xl relative transition-all",
+                  isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
+                )}
+              >
+                <Bell className="w-5 h-5" />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-600 rounded-full border-2 border-white dark:border-[#0A0A0A]"></span>
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className={cn(
+                      "absolute right-0 mt-4 w-80 rounded-[2rem] border shadow-2xl z-50 overflow-hidden",
+                      isDarkMode ? "bg-[#111111] border-white/10" : "bg-white border-slate-200"
+                    )}
+                  >
+                    <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                      <h3 className="font-black tracking-tight">Notifications</h3>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-2 py-1 rounded-lg">
+                        {notifications.filter(n => !n.read).length} New
+                      </span>
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <Bell className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                          <p className="text-sm font-bold text-slate-400 italic">No notifications yet</p>
+                        </div>
+                      ) : (
+                        notifications.slice().reverse().map((n, i) => (
+                          <div key={i} className={cn(
+                            "p-4 border-b border-slate-50 dark:border-white/5 last:border-0 transition-colors",
+                            !n.read && (isDarkMode ? "bg-white/5" : "bg-red-50/30")
+                          )}>
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                "w-2 h-2 rounded-full mt-1.5 shrink-0",
+                                n.type === 'success' ? "bg-emerald-500" : n.type === 'error' ? "bg-red-500" : "bg-blue-500"
+                              )} />
+                              <div>
+                                <h4 className="text-sm font-black mb-1">{n.title}</h4>
+                                <p className="text-xs text-slate-500 leading-relaxed">{n.message}</p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">
+                                  {new Date(n.timestamp).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-white/10">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold truncate max-w-[150px]">{user.name}</p>
@@ -677,7 +770,7 @@ export default function App() {
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
               user.role === 'admin' ? <AdminDashboard user={user} isDarkMode={isDarkMode} users={users} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} /> :
-              user.role === 'faculty' ? <FacultyDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} recommendations={recommendations} fetchRecommendations={fetchRecommendations} /> :
+              user.role === 'faculty' ? <FacultyDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} recommendations={recommendations} fetchRecommendations={fetchRecommendations} users={users} /> :
               user.role === 'staff' ? <StaffDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} /> :
               <StudentDashboard user={user} isDarkMode={isDarkMode} setView={setView} announcements={announcements} scholarships={scholarships} financialAid={financialAid} />
             )}
@@ -690,6 +783,14 @@ export default function App() {
             {view === 'documents' && <Documents user={user} isDarkMode={isDarkMode} />}
             {view === 'announcements' && <Announcements announcements={announcements} user={user} isDarkMode={isDarkMode} fetchAnnouncements={fetchAnnouncements} />}
             {view === 'admin' && <AdminPanel users={users} fetchUsers={fetchUsers} isDarkMode={isDarkMode} />}
+            {view === 'policies' && <PoliciesView policies={policies} isDarkMode={isDarkMode} />}
+            {view === 'scholarships' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} setView={setView} />}
+            {view === 'programs' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} isAdmin={true} fetchScholarships={fetchScholarships} setView={setView} />}
+            {view === 'applications' && <ApplicationsView financialAid={financialAid} user={user} isDarkMode={isDarkMode} updateFinancialAidStatus={updateFinancialAidStatus} />}
+            {view === 'reports' && <ReportsView financialAid={financialAid} scholarships={scholarships} isDarkMode={isDarkMode} user={user} />}
+            {view === 'activity' && <ActivityView isDarkMode={isDarkMode} />}
+            {view === 'recommendations' && <RecommendationsView recommendations={recommendations} user={user} isDarkMode={isDarkMode} fetchRecommendations={fetchRecommendations} users={users} />}
+            {view === 'notifications' && <NotificationsView notifications={notifications} isDarkMode={isDarkMode} />}
           </AnimatePresence>
         </main>
       </div>
@@ -703,11 +804,9 @@ function LandingPage({ onGetStarted, onRegister }: { onGetStarted: () => void, o
       {/* Navbar */}
       <nav className="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
         <div className="flex items-center gap-2 font-bold text-xl">
-          <Shield className="w-8 h-8 text-red-600" />
           <span>Student Aid Portal</span>
         </div>
         <div className="flex items-center gap-6">
-          <button onClick={onGetStarted} className="text-stone-600 font-medium hover:text-stone-900">Login</button>
           <button onClick={onRegister} className="bg-red-600 text-white px-6 py-2 rounded-full font-bold hover:bg-red-700 transition-colors">
             Get Started
           </button>
@@ -728,28 +827,17 @@ function LandingPage({ onGetStarted, onRegister }: { onGetStarted: () => void, o
               seamless financial aid management and academic 
               tracking.
             </p>
-            <button 
-              onClick={onRegister}
-              className="bg-red-600 text-white px-10 py-4 rounded-xl font-bold text-lg hover:bg-red-700 transition-all shadow-xl shadow-red-200"
-            >
-              Register Now
-            </button>
+            <div className="flex gap-4">
+              <button 
+                onClick={onRegister}
+                className="bg-red-600 text-white px-10 py-4 rounded-xl font-bold text-lg hover:bg-red-700 transition-all shadow-xl shadow-red-200"
+              >
+                Register Now
+              </button>
+            </div>
           </div>
           <div className="flex-1 flex justify-center lg:justify-end">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-red-600/10 blur-[100px] rounded-full"></div>
-              <img 
-                src="https://upload.wikimedia.org/wikipedia/en/0/0e/St._Cecilia%27s_College_Cebu_Logo.png" 
-                alt="St. Cecilia's College Logo" 
-                className="w-full max-w-[400px] relative z-10 drop-shadow-[0_20px_50px_rgba(220,38,38,0.2)]"
-                referrerPolicy="no-referrer"
-              />
-            </motion.div>
+            {/* Red box removed */}
           </div>
         </div>
       </section>
@@ -1095,19 +1183,21 @@ function FacultyDashboard({
   financialAid = [], 
   scholarships = [], 
   recommendations = [], 
-  fetchRecommendations 
+  fetchRecommendations,
+  users = []
 }: { 
   user: UserData, 
   isDarkMode?: boolean, 
   financialAid?: any[], 
   scholarships?: any[], 
   recommendations?: any[], 
-  fetchRecommendations: () => void 
+  fetchRecommendations: () => void,
+  users?: UserData[]
 }) {
   const [showRecModal, setShowRecModal] = useState(false);
   const [recData, setRecData] = useState({ studentId: '', studentName: '', content: '' });
 
-  const myRecommendations = recommendations.filter((r: any) => r.facultyId === user.id);
+  const students = users.filter(u => u.role === 'student');
 
   const handleRecommendation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1120,6 +1210,17 @@ function FacultyDashboard({
     setRecData({ studentId: '', studentName: '', content: '' });
     fetchRecommendations();
   };
+
+  const handleStudentSelect = (studentName: string) => {
+    const selectedStudent = students.find(s => s.name === studentName);
+    if (selectedStudent) {
+      setRecData({ ...recData, studentName, studentId: selectedStudent.id });
+    } else {
+      setRecData({ ...recData, studentName, studentId: '' });
+    }
+  };
+
+  const myRecommendations = recommendations.filter((r: any) => r.facultyId === user.id);
 
   const assignedApplications = financialAid.filter(app => app.facultyId === user.id || app.status === 'pending').slice(0, 5);
 
@@ -1263,31 +1364,33 @@ function FacultyDashboard({
             </div>
             <form onSubmit={handleRecommendation} className="space-y-4">
               <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Student Name</label>
+                <select 
+                  value={recData.studentName}
+                  onChange={e => handleStudentSelect(e.target.value)}
+                  className={cn(
+                    "w-full p-4 rounded-2xl border outline-none focus:ring-2 focus:ring-red-600 transition-all font-bold",
+                    isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200"
+                  )}
+                  required
+                >
+                  <option value="">Select Student</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Student ID</label>
                 <input 
                   type="text" 
                   value={recData.studentId}
-                  onChange={e => setRecData({...recData, studentId: e.target.value})}
+                  readOnly
                   className={cn(
-                    "w-full p-4 rounded-2xl border outline-none focus:ring-2 focus:ring-red-600 transition-all font-bold",
+                    "w-full p-4 rounded-2xl border outline-none transition-all font-bold opacity-70",
                     isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200"
                   )}
-                  placeholder="SCC-00-0000"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Student Name</label>
-                <input 
-                  type="text" 
-                  value={recData.studentName}
-                  onChange={e => setRecData({...recData, studentName: e.target.value})}
-                  className={cn(
-                    "w-full p-4 rounded-2xl border outline-none focus:ring-2 focus:ring-red-600 transition-all font-bold",
-                    isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200"
-                  )}
-                  placeholder="Full Name"
-                  required
+                  placeholder="Student ID"
                 />
               </div>
               <div>
@@ -1797,6 +1900,70 @@ function AdminDashboard({
   );
 }
 
+function PoliciesView({ policies, isDarkMode }: { policies: any, isDarkMode: boolean }) {
+  if (!policies) return <div className="p-12 text-center font-bold text-slate-400">Loading policies...</div>;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8 max-w-4xl mx-auto"
+    >
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-black tracking-tight mb-4 text-red-600">Policies & User Guide</h1>
+        <p className="text-slate-500 font-medium">Everything you need to know about the Student Aid Portal</p>
+      </div>
+
+      <div className="grid gap-6">
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border",
+          isDarkMode ? "bg-[#111111] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-3 bg-red-50 rounded-2xl">
+              <UserPlus className="w-6 h-6 text-red-600" />
+            </div>
+            <h2 className="text-2xl font-black tracking-tight">Registration Policy</h2>
+          </div>
+          <div className="prose prose-slate dark:prose-invert max-w-none">
+            <p className="text-slate-500 leading-relaxed whitespace-pre-line">{policies.registration}</p>
+          </div>
+        </div>
+
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border",
+          isDarkMode ? "bg-[#111111] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-3 bg-blue-50 rounded-2xl">
+              <Shield className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-black tracking-tight">Roles & Permissions</h2>
+          </div>
+          <div className="prose prose-slate dark:prose-invert max-w-none">
+            <p className="text-slate-500 leading-relaxed whitespace-pre-line">{policies.roles}</p>
+          </div>
+        </div>
+
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border",
+          isDarkMode ? "bg-[#111111] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-3 bg-emerald-50 rounded-2xl">
+              <BookOpen className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h2 className="text-2xl font-black tracking-tight">User Guide</h2>
+          </div>
+          <div className="prose prose-slate dark:prose-invert max-w-none">
+            <p className="text-slate-500 leading-relaxed whitespace-pre-line">{policies.guide}</p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, isDarkMode: boolean, setError: (msg: string) => void }) {
   const [step, setStep] = useState(1);
   const [schoolId, setSchoolId] = useState('');
@@ -1874,95 +2041,105 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <button 
         onClick={onBack}
-        className="flex items-center gap-2 text-stone-500 hover:text-stone-900 transition-colors text-sm"
+        className="flex items-center gap-2 text-stone-500 hover:text-stone-900 transition-colors text-sm font-bold"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Login
       </button>
 
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-[#1a2b4b]">Reset Password</h1>
-        <p className="text-stone-500 mt-2">Follow the steps to recover your account</p>
+      <div className="text-center">
+        <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+          <Key className="w-10 h-10 text-red-600" />
+        </div>
+        <h1 className="text-4xl font-black tracking-tight text-[#1a2b4b]">Account Recovery</h1>
+        <p className="text-stone-500 mt-3 font-medium">Follow the steps to reset your password</p>
       </div>
 
       {step === 1 ? (
-        <form onSubmit={handleGetQuestion} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">School ID Number</label>
+        <form onSubmit={handleGetQuestion} className="space-y-6">
+          <div className="space-y-2">
+            <label className="block text-sm font-black text-stone-700 uppercase tracking-widest">School ID Number</label>
             <input 
               type="text" 
               value={schoolId}
               onChange={(e) => setSchoolId(e.target.value)}
-              className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
-              placeholder="SCC-00-00000000"
+              className="w-full p-4 bg-stone-50 border-2 border-transparent rounded-2xl focus:border-red-600 focus:bg-white outline-none transition-all font-bold"
+              placeholder="SCC-XX-XXXXXXXX"
               required
             />
           </div>
           <button 
             disabled={loading}
-            className="w-full py-4 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="w-full py-5 bg-red-600 text-white rounded-2xl font-black text-lg hover:bg-red-700 transition-all shadow-xl shadow-red-200 disabled:opacity-50"
           >
-            {loading ? 'Searching...' : 'Next Step'}
+            {loading ? 'Searching Account...' : 'Continue Recovery'}
           </button>
+          
+          <div className="pt-4 border-t border-stone-100">
+            <p className="text-sm text-stone-500 text-center mb-4">Forgot your security question?</p>
+            <button 
+              type="button"
+              onClick={handleRequestAdmin}
+              className="w-full py-4 border-2 border-stone-200 text-stone-700 rounded-2xl font-bold hover:bg-stone-50 transition-all"
+            >
+              Request Admin Reset
+            </button>
+          </div>
         </form>
       ) : (
-        <form onSubmit={handleReset} className="space-y-4">
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Security Question</p>
-            <p className="text-stone-900 font-bold">{question}</p>
+        <form onSubmit={handleReset} className="space-y-6">
+          <div className="p-6 bg-slate-50 rounded-[2rem] border-2 border-slate-100 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <Shield className="w-12 h-12" />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Security Question</p>
+            <p className="text-xl font-black text-stone-900 leading-tight">{question}</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Your Answer</label>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-black text-stone-700 uppercase tracking-widest">Your Answer</label>
             <input 
               type="text" 
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
-              placeholder="Answer confirmation"
+              className="w-full p-4 bg-stone-50 border-2 border-transparent rounded-2xl focus:border-red-600 focus:bg-white outline-none transition-all font-bold"
+              placeholder="Type your answer here"
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">New Password</label>
-            <input 
-              type="password" 
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
-              placeholder="Min. 6 characters"
-              required
-            />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-black text-stone-700 uppercase tracking-widest">New Password</label>
+              <input 
+                type="password" 
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full p-4 bg-stone-50 border-2 border-transparent rounded-2xl focus:border-red-600 focus:bg-white outline-none transition-all font-bold"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-black text-stone-700 uppercase tracking-widest">Confirm</label>
+              <input 
+                type="password" 
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full p-4 bg-stone-50 border-2 border-transparent rounded-2xl focus:border-red-600 focus:bg-white outline-none transition-all font-bold"
+                required
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Confirm New Password</label>
-            <input 
-              type="password" 
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
-              placeholder="Repeat new password"
-              required
-            />
-          </div>
+
           <button 
             disabled={loading}
-            className="w-full py-4 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="w-full py-5 bg-red-600 text-white rounded-2xl font-black text-lg hover:bg-red-700 transition-all shadow-xl shadow-red-200 disabled:opacity-50"
           >
-            {loading ? 'Resetting...' : 'Reset Password'}
+            {loading ? 'Resetting Password...' : 'Update Password'}
           </button>
-          <div className="pt-4 text-center">
-            <p className="text-xs text-stone-400 mb-2">Can't remember the answer?</p>
-            <button 
-              type="button"
-              onClick={handleRequestAdmin}
-              className="text-red-600 text-sm font-bold hover:underline"
-            >
-              Request Admin Access
-            </button>
-          </div>
         </form>
       )}
     </div>
@@ -3234,3 +3411,718 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
     </motion.div>
   );
 }
+
+const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fetchScholarships, setView }: any) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newScholarship, setNewScholarship] = useState({
+    name: '',
+    description: '',
+    criteria: '',
+    deadline: '',
+    amount: ''
+  });
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/scholarships', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newScholarship)
+      });
+      if (response.ok) {
+        setIsAdding(false);
+        setNewScholarship({ name: '', description: '', criteria: '', deadline: '', amount: '' });
+        fetchScholarships?.();
+      }
+    } catch (error) {
+      console.error('Error adding scholarship:', error);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-4xl font-black tracking-tighter mb-2">Scholarship Programs</h2>
+          <p className="text-slate-500">Available financial assistance and academic grants.</p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Add Program
+          </button>
+        )}
+      </div>
+
+      {isAdding && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "p-8 rounded-[2.5rem] border",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-xl"
+          )}
+        >
+          <form onSubmit={handleAdd} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Program Name</label>
+                <input
+                  required
+                  value={newScholarship.name}
+                  onChange={e => setNewScholarship({ ...newScholarship, name: e.target.value })}
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border transition-all outline-none",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Amount/Grant</label>
+                <input
+                  required
+                  value={newScholarship.amount}
+                  onChange={e => setNewScholarship({ ...newScholarship, amount: e.target.value })}
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border transition-all outline-none",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                  )}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Description</label>
+              <textarea
+                required
+                value={newScholarship.description}
+                onChange={e => setNewScholarship({ ...newScholarship, description: e.target.value })}
+                className={cn(
+                  "w-full px-6 py-4 rounded-2xl border transition-all outline-none min-h-[100px]",
+                  isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Criteria</label>
+                <input
+                  required
+                  value={newScholarship.criteria}
+                  onChange={e => setNewScholarship({ ...newScholarship, criteria: e.target.value })}
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border transition-all outline-none",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Deadline</label>
+                <input
+                  required
+                  type="date"
+                  value={newScholarship.deadline}
+                  onChange={e => setNewScholarship({ ...newScholarship, deadline: e.target.value })}
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border transition-all outline-none",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                  )}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="px-8 py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold hover:scale-105 transition-all"
+              >
+                Save Program
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {scholarships.map((s: any) => (
+          <motion.div
+            key={s.id}
+            whileHover={{ y: -5 }}
+            className={cn(
+              "p-8 rounded-[2.5rem] border flex flex-col transition-all",
+              isDarkMode ? "bg-[#111111] border-white/5 hover:border-white/10" : "bg-white border-slate-200 shadow-sm hover:shadow-xl"
+            )}
+          >
+            <div className="mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 dark:bg-white flex items-center justify-center mb-4">
+                <Award className="w-6 h-6 text-white dark:text-slate-900" />
+              </div>
+              <h3 className="text-xl font-black tracking-tight mb-2">{s.name}</h3>
+              <p className="text-sm text-slate-500 line-clamp-3">{s.description}</p>
+            </div>
+            
+            <div className="mt-auto space-y-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-400">Grant Amount</span>
+                <span className="font-bold text-emerald-500">{s.amount}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-400">Deadline</span>
+                <span className="font-bold">{new Date(s.deadline).toLocaleDateString()}</span>
+              </div>
+              
+              {!isAdmin && user.role === 'student' && (
+                <button 
+                  onClick={() => setView('finance')}
+                  className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  Apply Now
+                </button>
+              )}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidStatus }: any) => {
+  const filteredApplications = user.role === 'student' 
+    ? financialAid.filter((a: any) => a.studentId === user.id)
+    : financialAid;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div>
+        <h2 className="text-4xl font-black tracking-tighter mb-2">
+          {user.role === 'student' ? 'My Applications' : 'All Applications'}
+        </h2>
+        <p className="text-slate-500">Track and manage financial aid requests.</p>
+      </div>
+
+      <div className={cn(
+        "rounded-[2.5rem] border overflow-hidden transition-all",
+        isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+      )}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Student</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Type</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Date</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                {(user.role === 'admin' || user.role === 'staff') && (
+                  <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
+              {filteredApplications.map((a: any) => (
+                <tr key={a.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
+                  <td className="px-8 py-6">
+                    <p className="font-bold">{a.studentName}</p>
+                    <p className="text-xs text-slate-400">{a.studentId}</p>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="text-sm font-medium">{a.type}</span>
+                  </td>
+                  <td className="px-8 py-6 text-sm text-slate-400">
+                    {new Date(a.date).toLocaleDateString()}
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      a.status === 'pending' ? "bg-amber-500/10 text-amber-500" :
+                      a.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" :
+                      "bg-red-500/10 text-red-500"
+                    )}>
+                      {a.status}
+                    </span>
+                  </td>
+                  {(user.role === 'admin' || user.role === 'staff') && (
+                    <td className="px-8 py-6 text-right">
+                      {a.status === 'pending' && (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => updateFinancialAidStatus(a.id, 'approved')}
+                            className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => updateFinancialAidStatus(a.id, 'rejected')}
+                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filteredApplications.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-8 py-20 text-center text-slate-400">
+                    No applications found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const ReportsView = ({ financialAid, scholarships, isDarkMode, user }: any) => {
+  const isAdmin = user.role === 'admin';
+  const isFaculty = user.role === 'faculty';
+
+  const filteredAid = isFaculty 
+    ? financialAid.filter((a: any) => a.facultyId === user.id)
+    : financialAid;
+
+  const stats = [
+    { label: isAdmin ? 'Total Applications' : 'My Assigned Applications', value: filteredAid.length, icon: <FileText className="w-6 h-6" />, color: 'blue' },
+    { label: isAdmin ? 'Approved Aid' : 'My Approved Reviews', value: filteredAid.filter((a: any) => a.status === 'approved').length, icon: <CheckCircle className="w-6 h-6" />, color: 'emerald' },
+    { label: 'Active Scholarships', value: scholarships.length, icon: <Award className="w-6 h-6" />, color: 'amber' },
+    { label: isAdmin ? 'Pending Reviews' : 'My Pending Reviews', value: filteredAid.filter((a: any) => a.status === 'pending').length, icon: <Clock className="w-6 h-6" />, color: 'indigo' },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div>
+        <h2 className="text-4xl font-black tracking-tighter mb-2">
+          {isAdmin ? 'Admin Reports & Analytics' : 'Faculty Reports & Analytics'}
+        </h2>
+        <p className="text-slate-500">
+          {isAdmin ? 'Overview of global scholarship and financial aid performance.' : 'Overview of your assigned scholarship and financial aid reviews.'}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat: any, i: number) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1 }}
+            className={cn(
+              "p-8 rounded-[2.5rem] border transition-all",
+              isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+            )}
+          >
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center mb-4",
+              stat.color === 'blue' ? "bg-blue-500/10 text-blue-500" :
+              stat.color === 'emerald' ? "bg-emerald-500/10 text-emerald-500" :
+              stat.color === 'amber' ? "bg-amber-500/10 text-amber-500" :
+              "bg-indigo-500/10 text-indigo-500"
+            )}>
+              {stat.icon}
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">{stat.label}</p>
+            <p className="text-3xl font-black tracking-tighter">{stat.value}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <h3 className="text-xl font-black tracking-tight mb-6">Application Status Distribution</h3>
+          <div className="h-[300px] flex items-end justify-around gap-4 pt-10">
+            {['pending', 'approved', 'rejected'].map((status) => {
+              const count = filteredAid.filter((a: any) => a.status === status).length;
+              const percentage = filteredAid.length > 0 ? (count / filteredAid.length) * 100 : 0;
+              return (
+                <div key={status} className="flex-1 flex flex-col items-center gap-4">
+                  <div className="w-full relative group">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${percentage}%` }}
+                      className={cn(
+                        "w-full rounded-t-2xl transition-all",
+                        status === 'pending' ? "bg-amber-500" :
+                        status === 'approved' ? "bg-emerald-500" :
+                        "bg-red-500"
+                      )}
+                    />
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold">
+                      {count}
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{status}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <h3 className="text-xl font-black tracking-tight mb-6">Recent Activity</h3>
+          <div className="space-y-4">
+            {financialAid.slice(0, 5).map((a: any) => (
+              <div key={a.id} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-white/5">
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center",
+                  a.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" :
+                  a.status === 'rejected' ? "bg-red-500/10 text-red-500" :
+                  "bg-amber-500/10 text-amber-500"
+                )}>
+                  {a.status === 'approved' ? <CheckCircle className="w-5 h-5" /> : a.status === 'rejected' ? <XCircle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold">{a.studentName}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest">{a.type} - {a.status}</p>
+                </div>
+                <span className="text-[10px] text-slate-400">{new Date(a.date).toLocaleDateString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const ActivityView = ({ isDarkMode }: any) => {
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/audit-logs')
+      .then(res => res.json())
+      .then(data => setLogs(data));
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div>
+        <h2 className="text-4xl font-black tracking-tighter mb-2">System Activity</h2>
+        <p className="text-slate-500">Real-time audit logs and security events.</p>
+      </div>
+
+      <div className={cn(
+        "rounded-[2.5rem] border overflow-hidden transition-all",
+        isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+      )}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Timestamp</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">User ID</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Action</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Details</th>
+              </tr>
+            </thead>
+            <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
+              {[...logs].reverse().map((log: any) => (
+                <tr key={log.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
+                  <td className="px-8 py-6 text-xs font-mono text-slate-400">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </td>
+                  <td className="px-8 py-6 font-bold text-sm">
+                    {log.userId}
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={cn(
+                      "px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest",
+                      log.action === 'LOGIN' ? "bg-blue-500/10 text-blue-500" :
+                      log.action === 'REGISTER' ? "bg-emerald-500/10 text-emerald-500" :
+                      log.action === 'PASSWORD_RESET' ? "bg-red-500/10 text-red-500" :
+                      "bg-slate-500/10 text-slate-500"
+                    )}>
+                      {log.action}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-xs text-slate-500">
+                    {log.details}
+                  </td>
+                </tr>
+              ))}
+              {logs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-8 py-20 text-center text-slate-400">
+                    No activity logs found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const RecommendationsView = ({ recommendations, user, isDarkMode, fetchRecommendations, users = [] }: any) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newRec, setNewRec] = useState({
+    studentName: '',
+    studentId: '',
+    content: ''
+  });
+
+  const students = users.filter((u: any) => u.role === 'student');
+
+  const handleStudentSelect = (studentName: string) => {
+    const selectedStudent = students.find((s: any) => s.name === studentName);
+    if (selectedStudent) {
+      setNewRec({ ...newRec, studentName, studentId: selectedStudent.id });
+    } else {
+      setNewRec({ ...newRec, studentName, studentId: '' });
+    }
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newRec, facultyId: user.id, facultyName: user.name })
+      });
+      if (response.ok) {
+        setIsAdding(false);
+        setNewRec({ studentName: '', studentId: '', content: '' });
+        fetchRecommendations?.();
+      }
+    } catch (error) {
+      console.error('Error adding recommendation:', error);
+    }
+  };
+
+  const filteredRecs = user.role === 'faculty' 
+    ? recommendations.filter((r: any) => r.facultyId === user.id)
+    : recommendations;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-4xl font-black tracking-tighter mb-2">Faculty Recommendations</h2>
+          <p className="text-slate-500">Manage and submit student scholarship recommendations.</p>
+        </div>
+        {user.role === 'faculty' && (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            New Recommendation
+          </button>
+        )}
+      </div>
+
+      {isAdding && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "p-8 rounded-[2.5rem] border",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-xl"
+          )}
+        >
+          <form onSubmit={handleAdd} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Student Name</label>
+                <select
+                  required
+                  value={newRec.studentName}
+                  onChange={e => handleStudentSelect(e.target.value)}
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border transition-all outline-none font-bold",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                  )}
+                >
+                  <option value="">Select Student</option>
+                  {students.map((s: any) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Student ID</label>
+                <input
+                  required
+                  value={newRec.studentId}
+                  readOnly
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border transition-all outline-none font-bold opacity-70",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                  )}
+                  placeholder="Student ID"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Recommendation Content</label>
+              <textarea
+                required
+                value={newRec.content}
+                onChange={e => setNewRec({ ...newRec, content: e.target.value })}
+                className={cn(
+                  "w-full px-6 py-4 rounded-2xl border transition-all outline-none min-h-[150px]",
+                  isDarkMode ? "bg-white/5 border-white/10 focus:border-white/20" : "bg-slate-50 border-slate-200 focus:border-slate-900"
+                )}
+                placeholder="Describe why this student deserves the scholarship..."
+              />
+            </div>
+            <div className="flex justify-end gap-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="px-8 py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold hover:scale-105 transition-all"
+              >
+                Submit Recommendation
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6">
+        {filteredRecs.map((r: any) => (
+          <motion.div
+            key={r.id}
+            className={cn(
+              "p-8 rounded-[2.5rem] border transition-all",
+              isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+            )}
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black tracking-tight">{r.studentName}</h3>
+                  <p className="text-xs text-slate-400 uppercase tracking-widest">Student ID: {r.studentId}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold">Recommended by {r.facultyName}</p>
+                <p className="text-xs text-slate-400">{new Date(r.date).toLocaleDateString()}</p>
+              </div>
+            </div>
+            <div className={cn(
+              "p-6 rounded-2xl italic text-slate-500",
+              isDarkMode ? "bg-white/5" : "bg-slate-50"
+            )}>
+              "{r.content}"
+            </div>
+          </motion.div>
+        ))}
+        {filteredRecs.length === 0 && (
+          <div className="py-20 text-center text-slate-400">
+            No recommendations found.
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+const NotificationsView = ({ notifications, isDarkMode }: any) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div>
+        <h2 className="text-4xl font-black tracking-tighter mb-2">Notifications</h2>
+        <p className="text-slate-500">Stay updated with the latest activities and alerts.</p>
+      </div>
+
+      <div className="space-y-4">
+        {notifications.map((n: any) => (
+          <motion.div
+            key={n.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={cn(
+              "p-6 rounded-3xl border flex items-start gap-6 transition-all",
+              isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm",
+              !n.read && (isDarkMode ? "border-blue-500/30 bg-blue-500/5" : "border-blue-500/30 bg-blue-50/50")
+            )}
+          >
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+              n.type === 'registration' ? "bg-emerald-500/10 text-emerald-500" :
+              n.type === 'message' ? "bg-blue-500/10 text-blue-500" :
+              "bg-amber-500/10 text-amber-500"
+            )}>
+              {n.type === 'registration' ? <User className="w-6 h-6" /> :
+               n.type === 'message' ? <MessageSquare className="w-6 h-6" /> :
+               <Bell className="w-6 h-6" />}
+            </div>
+            <div className="flex-1">
+              <div className="flex justify-between items-start mb-1">
+                <h3 className="font-bold text-lg">{n.title}</h3>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {new Date(n.timestamp).toLocaleString()}
+                </span>
+              </div>
+              <p className="text-slate-500">{n.message}</p>
+            </div>
+            {!n.read && (
+              <div className="w-3 h-3 rounded-full bg-blue-500 mt-2 shrink-0" />
+            )}
+          </motion.div>
+        ))}
+        {notifications.length === 0 && (
+          <div className="py-20 text-center text-slate-400">
+            No notifications yet.
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};

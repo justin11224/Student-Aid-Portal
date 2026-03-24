@@ -54,6 +54,7 @@ async function startServer() {
       financialAid: [],
       resetRequests: [],
       auditLogs: [],
+      notifications: [],
       scholarshipPrograms: [],
       recommendations: []
     };
@@ -86,6 +87,20 @@ async function startServer() {
     saveDB(db);
   };
 
+  const createNotification = (userId: string, title: string, message: string, type: string = 'info') => {
+    const db = getDB();
+    db.notifications.push({
+      id: Date.now(),
+      userId,
+      title,
+      message,
+      type,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+    saveDB(db);
+  };
+
   // --- API ROUTES ---
 
   // Auth
@@ -103,13 +118,17 @@ async function startServer() {
   });
 
   app.post("/api/auth/register", (req, res) => {
-    const { schoolId, surname, name, role, course, yearLevel, password, securityQuestion, securityAnswer } = req.body;
+    const { surname, name, role, course, yearLevel, password, securityQuestion, securityAnswer } = req.body;
     const db = getDB();
-    if (db.users.find((u: any) => u.id === schoolId)) {
-      return res.status(400).json({ success: false, message: "ID already registered" });
-    }
+    
+    // Auto-generate School ID
+    const year = new Date().getFullYear().toString().slice(-2);
+    const students = db.users.filter((u: any) => u.role === 'student');
+    const studentNum = (students.length + 1).toString().padStart(8, '0');
+    const generatedId = `SCC-${year}-${studentNum}`;
+
     const newUser = { 
-      id: schoolId, 
+      id: generatedId, 
       surname, 
       name, 
       role: role || "student", 
@@ -124,7 +143,8 @@ async function startServer() {
     };
     db.users.push(newUser);
     saveDB(db);
-    logAction(schoolId, "REGISTER", `New user registered with role: ${role || "student"}`);
+    logAction(generatedId, "REGISTER", `New user registered with role: ${role || "student"}. Generated ID: ${generatedId}`);
+    createNotification(generatedId, "Welcome!", "Welcome to the Student Aid Portal. Your School ID is " + generatedId, "success");
     res.json({ success: true, user: newUser });
   });
 
@@ -291,7 +311,25 @@ async function startServer() {
     const newMessage = { ...req.body, id: Date.now(), timestamp: new Date().toISOString() };
     db.messages.push(newMessage);
     saveDB(db);
+    createNotification(req.body.to, "New Message", `You received a new message from ${req.body.fromName || 'a user'}`, "info");
     res.json(newMessage);
+  });
+
+  // Notifications
+  app.get("/api/notifications/:userId", (req, res) => {
+    const db = getDB();
+    const userNotifications = db.notifications.filter((n: any) => n.userId === req.params.userId);
+    res.json(userNotifications);
+  });
+
+  app.post("/api/notifications/mark-read", (req, res) => {
+    const { userId } = req.body;
+    const db = getDB();
+    db.notifications.forEach((n: any) => {
+      if (n.userId === userId) n.read = true;
+    });
+    saveDB(db);
+    res.json({ success: true });
   });
 
   // Financial Aid
@@ -300,6 +338,8 @@ async function startServer() {
     const application = { ...req.body, id: Date.now(), status: "pending", date: new Date().toISOString() };
     db.financialAid.push(application);
     saveDB(db);
+    logAction(req.body.studentId, "FINANCIAL_AID_APPLY", `Applied for ${req.body.program}`);
+    createNotification("ADMIN", "New Application", `${req.body.studentName} applied for ${req.body.program}`, "info");
     res.json(application);
   });
 
@@ -313,12 +353,23 @@ async function startServer() {
     const index = db.financialAid.findIndex((f: any) => f.id === parseInt(req.params.id));
     if (index !== -1) {
       db.financialAid[index].status = status;
+      const studentId = db.financialAid[index].studentId;
       saveDB(db);
       logAction("ADMIN", "FINANCIAL_AID_UPDATE", `Application ${req.params.id} status updated to ${status}`);
+      createNotification(studentId, "Application Update", `Your application for ${db.financialAid[index].program} has been ${status}`, status === 'approved' ? 'success' : 'error');
       res.json({ success: true });
     } else {
       res.status(404).json({ success: false, message: "Application not found" });
     }
+  });
+
+  // Policies
+  app.get("/api/policies", (req, res) => {
+    res.json({
+      registration: "All students must provide valid information. School IDs are auto-generated upon successful registration.",
+      roles: "Students can apply for aid and track academics. Faculty can provide recommendations. Staff manage documents. Admins oversee the entire system.",
+      guide: "To apply for financial aid, navigate to the Financial Aid tab and click 'Apply Now'. Ensure all required documents are uploaded."
+    });
   });
 
   // Vite middleware for development
