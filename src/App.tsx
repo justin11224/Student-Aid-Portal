@@ -810,6 +810,7 @@ function LandingPage({ onGetStarted, onRegister }: { onGetStarted: () => void, o
           <button onClick={onRegister} className="bg-red-600 text-white px-6 py-2 rounded-full font-bold hover:bg-red-700 transition-colors">
             Get Started
           </button>
+          <button onClick={onGetStarted} className="text-stone-600 font-medium hover:text-stone-900">Login</button>
         </div>
       </nav>
 
