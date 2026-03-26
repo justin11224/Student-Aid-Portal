@@ -10,6 +10,7 @@ import {
   Settings, 
   LogOut, 
   Plus, 
+  AlertTriangle,
   Trash2, 
   Edit, 
   CheckCircle, 
@@ -118,6 +119,13 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<{ users: UserData[], announcements: any[], applications: any[] } | null>(null);
   const [policies, setPolicies] = useState<any>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'danger' | 'warning';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
 
   // Fetch data
   useEffect(() => {
@@ -436,22 +444,30 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setView('landing');
-    setLoginId('');
-    setLoginPassword('');
-    setIsRegistering(false);
-    setIsForgotPassword(false);
-    setRegData({ 
-      id: '', 
-      surname: '', 
-      name: '', 
-      role: 'student' as Role, 
-      course: 'BSIT', 
-      yearLevel: '1st Year',
-      password: '',
-      securityQuestion: 'What is your favorite color?',
-      securityAnswer: ''
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Logout Confirmation',
+      message: 'Are you sure you want to log out of your account? Any unsaved changes may be lost.',
+      type: 'warning',
+      onConfirm: () => {
+        setUser(null);
+        setView('landing');
+        setLoginId('');
+        setLoginPassword('');
+        setIsRegistering(false);
+        setIsForgotPassword(false);
+        setRegData({ 
+          id: '', 
+          surname: '', 
+          name: '', 
+          role: 'student' as Role, 
+          course: 'BSIT', 
+          yearLevel: '1st Year',
+          password: '',
+          securityQuestion: 'What is your favorite color?',
+          securityAnswer: ''
+        });
+      }
     });
   };
 
@@ -768,7 +784,8 @@ export default function App() {
 
             {user.role === 'faculty' && (
               <>
-                <NavItem icon={<Users />} label="Student Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Users />} label="Student Directory" active={view === 'students'} onClick={() => setView('students')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<FileText />} label="Student Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<CheckCircle />} label="Recommendations" active={view === 'recommendations'} onClick={() => setView('recommendations')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Award />} label="Scholarship Info" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<TrendingUp />} label="Reports" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
@@ -956,8 +973,9 @@ export default function App() {
             {view === 'finance' && <FinancialAid user={user} financialAid={financialAid} fetchFinancialAid={fetchFinancialAid} isDarkMode={isDarkMode} />}
             {view === 'messages' && <Messages user={user} messages={messages} fetchMessages={fetchMessages} users={users} isDarkMode={isDarkMode} />}
             {view === 'documents' && <Documents user={user} isDarkMode={isDarkMode} />}
-            {view === 'announcements' && <Announcements announcements={announcements} user={user} isDarkMode={isDarkMode} fetchAnnouncements={fetchAnnouncements} />}
-            {view === 'admin' && <AdminPanel users={users} fetchUsers={fetchUsers} isDarkMode={isDarkMode} />}
+            {view === 'announcements' && <Announcements announcements={announcements} user={user} isDarkMode={isDarkMode} fetchAnnouncements={fetchAnnouncements} setConfirmConfig={setConfirmConfig} />}
+            {view === 'admin' && <AdminPanel users={users} fetchUsers={fetchUsers} isDarkMode={isDarkMode} setConfirmConfig={setConfirmConfig} />}
+            {view === 'students' && <StudentsView users={users} isDarkMode={isDarkMode} />}
             {view === 'policies' && <PoliciesView policies={policies} isDarkMode={isDarkMode} />}
             {view === 'scholarships' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} setView={setView} />}
             {view === 'programs' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} isAdmin={true} fetchScholarships={fetchScholarships} setView={setView} />}
@@ -969,9 +987,69 @@ export default function App() {
           </AnimatePresence>
         </main>
       </div>
+
+      <ConfirmationModal 
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }
+
+const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, type, isDarkMode }: any) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[1000]">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        className={cn(
+          "p-10 rounded-[3rem] w-full max-w-md shadow-2xl border",
+          isDarkMode ? "bg-[#111111] border-white/10 text-white" : "bg-white border-slate-200"
+        )}
+      >
+        <div className={cn(
+          "w-16 h-16 rounded-2xl flex items-center justify-center mb-6",
+          type === 'danger' ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-500"
+        )}>
+          {type === 'danger' ? <Trash2 className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+        </div>
+        <h2 className="text-3xl font-black tracking-tighter mb-4">{title}</h2>
+        <p className={cn("mb-8 leading-relaxed", isDarkMode ? "text-slate-400" : "text-slate-500")}>
+          {message}
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={onCancel}
+            className={cn(
+              "py-4 rounded-2xl font-bold transition-all",
+              isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-100 hover:bg-slate-200"
+            )}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => {
+              onConfirm();
+              onCancel();
+            }}
+            className={cn(
+              "py-4 rounded-2xl text-white font-black shadow-xl transition-all",
+              type === 'danger' ? "bg-red-600 hover:bg-red-700 shadow-red-200" : "bg-amber-600 hover:bg-amber-700 shadow-amber-200"
+            )}
+          >
+            Confirm
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 function LandingPage({ onGetStarted, onRegister }: { onGetStarted: () => void, onRegister: () => void }) {
   return (
@@ -3286,9 +3364,28 @@ function Documents({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean 
   );
 }
 
-function Announcements({ announcements, user, isDarkMode, fetchAnnouncements }: { announcements: any[], user: UserData, isDarkMode?: boolean, fetchAnnouncements: () => void }) {
+function Announcements({ announcements, user, isDarkMode, fetchAnnouncements, setConfirmConfig }: { announcements: any[], user: UserData, isDarkMode?: boolean, fetchAnnouncements: () => void, setConfirmConfig: any }) {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ title: '', content: '', role: 'all' });
+
+  const handleDelete = async (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Announcement',
+      message: 'Are you sure you want to delete this announcement? This action cannot be undone.',
+      type: 'danger',
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('announcements')
+          .delete()
+          .eq('id', id);
+        
+        if (!error) {
+          fetchAnnouncements();
+        }
+      }
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3411,9 +3508,20 @@ function Announcements({ announcements, user, isDarkMode, fetchAnnouncements }: 
             </div>
             <h3 className="text-3xl font-black tracking-tight mb-4">{a.title}</h3>
             <p className={cn("text-lg leading-relaxed", isDarkMode ? "text-slate-400" : "text-slate-600")}>{a.content}</p>
-            <div className="mt-8 pt-8 border-t border-dashed border-slate-200 dark:border-white/5 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-black">SC</div>
-              <span className={cn("text-xs font-black uppercase tracking-widest", isDarkMode ? "text-slate-500" : "text-slate-400")}>Official Administration</span>
+            <div className="mt-8 pt-8 border-t border-dashed border-slate-200 dark:border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-black">SC</div>
+                <span className={cn("text-xs font-black uppercase tracking-widest", isDarkMode ? "text-slate-500" : "text-slate-400")}>Official Administration</span>
+              </div>
+              {user.role === 'admin' && (
+                <button 
+                  onClick={() => handleDelete(a.id)}
+                  className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"
+                  title="Delete Announcement"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </motion.div>
         ))}
@@ -3422,13 +3530,103 @@ function Announcements({ announcements, user, isDarkMode, fetchAnnouncements }: 
   );
 }
 
-function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetchUsers: any, isDarkMode?: boolean }) {
+const StudentsView = ({ users, isDarkMode }: { users: UserData[], isDarkMode: boolean }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const students = users.filter(u => u.role === 'student');
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.course && s.course.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter">Student Directory</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Search and view student profiles.</p>
+      </header>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input 
+          type="text"
+          placeholder="Search by name, ID, or course..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className={cn(
+            "w-full pl-10 pr-4 py-3 rounded-xl border outline-none transition-all",
+            isDarkMode ? "bg-white/5 border-white/10 focus:border-red-600/50" : "bg-white border-slate-200 focus:border-red-600"
+          )}
+        />
+      </div>
+
+      <div className={cn(
+        "rounded-[2.5rem] border overflow-hidden transition-all",
+        isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+      )}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Student</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Course & Year</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
+              {filteredStudents.map(s => (
+                <tr key={s.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center font-black text-red-500 text-xl overflow-hidden">
+                        {s.profilePic ? (
+                          <img src={s.profilePic} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          s.name[0]
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-bold text-lg">{s.name} {s.surname}</p>
+                        <p className={cn("text-xs font-mono", isDarkMode ? "text-red-400" : "text-red-600")}>{s.id}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <p className="font-bold">{s.course}</p>
+                    <p className="text-xs text-slate-400">{s.yearLevel}</p>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <span className={cn(
+                      "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      s.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                    )}>
+                      {s.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {filteredStudents.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-8 py-20 text-center text-slate-400">
+                    No students found matching your search.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users: UserData[], fetchUsers: any, isDarkMode?: boolean, setConfirmConfig: any }) {
   const [showAdd, setShowAdd] = useState(false);
   const [formData, setFormData] = useState({ id: '', name: '', surname: '', role: 'student' as Role, password: 'password', securityQuestion: 'What is your favorite color?', securityAnswer: 'blue' });
   const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'resets' | 'logs'>('users');
+  const [searchTerm, setSearchTerm] = useState('');
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [approveReset, setApproveReset] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState('');
 
@@ -3527,23 +3725,29 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirmDelete) return;
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', confirmDelete);
-    
-    if (!error) {
-      await supabase.from('audit_logs').insert({
-        userId: 'ADMIN',
-        action: 'USER_DELETED',
-        details: `Deleted user ${confirmDelete}`,
-        timestamp: new Date().toISOString()
-      });
-      setConfirmDelete(null);
-      fetchUsers();
-    }
+  const handleDelete = async (userId: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Deactivate User',
+      message: `Are you sure you want to deactivate user ${userId}? This action cannot be undone and will remove their access to the system.`,
+      type: 'danger',
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId);
+        
+        if (!error) {
+          await supabase.from('audit_logs').insert({
+            userId: 'ADMIN',
+            action: 'USER_DELETED',
+            details: `Deleted user ${userId}`,
+            timestamp: new Date().toISOString()
+          });
+          fetchUsers();
+        }
+      }
+    });
   };
 
   return (
@@ -3618,6 +3822,22 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
         </div>
       </header>
 
+      {(activeTab === 'users' || activeTab === 'approvals') && (
+        <div className="relative max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input 
+            type="text"
+            placeholder="Search by name, ID, or course..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={cn(
+              "w-full pl-10 pr-4 py-3 rounded-xl border outline-none transition-all",
+              isDarkMode ? "bg-white/5 border-white/10 focus:border-red-600/50" : "bg-white border-slate-200 focus:border-red-600"
+            )}
+          />
+        </div>
+      )}
+
       {activeTab === 'users' ? (
         <div className={cn(
           "rounded-[2.5rem] border overflow-hidden transition-all",
@@ -3634,7 +3854,12 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {users.filter(u => u.status !== 'pending').map(u => (
+                {users.filter(u => 
+                  u.status !== 'pending' && 
+                  (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   u.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   (u.course && u.course.toLowerCase().includes(searchTerm.toLowerCase())))
+                ).map(u => (
                   <tr key={u.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
@@ -3673,7 +3898,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                           <Edit className="w-5 h-5" />
                         </button>
                         <button 
-                          onClick={() => setConfirmDelete(u.id)} 
+                          onClick={() => handleDelete(u.id)} 
                           className="p-3 text-slate-400 hover:text-red-600 transition-colors"
                         >
                           <Trash2 className="w-5 h-5" />
@@ -3701,7 +3926,12 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {users.filter(u => u.status === 'pending').map(u => (
+                {users.filter(u => 
+                  u.status === 'pending' && 
+                  (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   u.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   (u.course && u.course.toLowerCase().includes(searchTerm.toLowerCase())))
+                ).map(u => (
                   <tr key={u.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
@@ -3931,37 +4161,6 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                 <button type="submit" className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all">Create User</button>
               </div>
             </form>
-          </motion.div>
-        </div>
-      )}
-
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={cn(
-            "p-10 rounded-[3rem] w-full max-w-md shadow-2xl border",
-            isDarkMode ? "bg-[#111111] border-white/10 text-white" : "bg-white border-slate-200"
-          )}>
-            <h2 className="text-3xl font-black tracking-tighter mb-4">Deactivate User?</h2>
-            <p className={cn("mb-8", isDarkMode ? "text-slate-400" : "text-slate-500")}>
-              Are you sure you want to deactivate user <span className="font-bold text-red-500">{confirmDelete}</span>? This action cannot be undone.
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <button 
-                onClick={() => setConfirmDelete(null)}
-                className={cn(
-                  "py-4 rounded-2xl font-bold transition-all",
-                  isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-100 hover:bg-slate-200"
-                )}
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleDelete}
-                className="py-4 rounded-2xl bg-red-600 text-white font-black hover:bg-red-700 shadow-xl shadow-red-200 transition-all"
-              >
-                Deactivate
-              </button>
-            </div>
           </motion.div>
         </div>
       )}
