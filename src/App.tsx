@@ -135,12 +135,34 @@ export default function App() {
 
   // Generate ID for registration
   useEffect(() => {
-    if (isRegistering && !regData.id) {
-      const year = new Date().getFullYear().toString().slice(-2);
-      const random = Math.floor(10000000 + Math.random() * 90000000);
-      const generatedId = `SCC-${year}-${random}`;
-      setRegData(prev => ({ ...prev, id: generatedId }));
-    }
+    const generateSequentialId = async () => {
+      if (isRegistering && !regData.id) {
+        try {
+          const year = new Date().getFullYear().toString().slice(-2);
+          
+          // Fetch the total count of users to determine the next sequence number
+          const { count, error } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true });
+
+          if (error) throw error;
+
+          const nextNumber = (count || 0) + 1;
+          const paddedNumber = nextNumber.toString().padStart(8, '0');
+          const generatedId = `SCC-${year}-${paddedNumber}`;
+          
+          setRegData(prev => ({ ...prev, id: generatedId }));
+        } catch (err) {
+          console.error('Error generating sequential ID:', err);
+          // Fallback to random if count fails
+          const year = new Date().getFullYear().toString().slice(-2);
+          const random = Math.floor(10000000 + Math.random() * 90000000);
+          setRegData(prev => ({ ...prev, id: `SCC-${year}-${random}` }));
+        }
+      }
+    };
+
+    generateSequentialId();
   }, [isRegistering, regData.id]);
 
   const fetchPolicies = async () => {
