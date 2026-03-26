@@ -61,18 +61,6 @@ import {
 } from 'recharts';
 import { isSupabaseConfigured, updateSupabaseConfig, supabase } from './lib/supabase';
 
-// API URL for backend calls
-const API_URL = import.meta.env.VITE_API_URL || '';
-
-const getApiUrl = (path: string) => {
-  if (!API_URL) return path;
-  // Ensure absolute URL
-  const base = API_URL.startsWith('http') ? API_URL : `https://${API_URL}`;
-  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  return `${cleanBase}${cleanPath}`;
-};
-
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -146,9 +134,12 @@ export default function App() {
   }, [user]);
 
   const fetchPolicies = async () => {
-    const res = await fetch(getApiUrl('/api/policies'));
-    const data = await res.json();
-    setPolicies(data);
+    const { data, error } = await supabase
+      .from('policies')
+      .select('*');
+    if (!error && data) {
+      setPolicies(data[0] || null);
+    }
   };
 
   const fetchNotifications = async () => {
@@ -318,24 +309,42 @@ export default function App() {
     e.preventDefault();
     setError('');
     try {
-      const url = getApiUrl('/api/auth/login');
-      console.log('Login attempt:', url);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schoolId: loginId, password: loginPassword }),
-        mode: 'cors'
-      });
-      const data = await res.json();
-      if (data.success) {
-        setUser(data.user);
-        setView('dashboard');
-      } else {
-        setError(data.message);
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', loginId)
+        .eq('password', loginPassword)
+        .single();
+
+      if (error || !data) {
+        setError('Invalid ID or password');
+        return;
       }
+
+      if (data.status === 'pending') {
+        setError('Your account is pending approval');
+        return;
+      }
+
+      if (data.status === 'rejected') {
+        setError('Your account has been rejected');
+        return;
+      }
+
+      setUser(data);
+      setView('dashboard');
+      
+      // Log audit
+      await supabase.from('audit_logs').insert({
+        action: 'LOGIN',
+        userId: data.id,
+        timestamp: new Date().toISOString(),
+        details: `User ${data.id} logged in`
+      });
+
     } catch (err) {
       console.error('Login error:', err);
-      setError('Connection failed. Please check your internet or API URL.');
+      setError('Connection failed. Please check your internet.');
     }
   };
 
@@ -343,24 +352,43 @@ export default function App() {
     e.preventDefault();
     setError('');
     try {
-      const url = getApiUrl('/api/auth/register');
-      console.log('Register attempt:', url);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(regData),
-        mode: 'cors'
-      });
-      const data = await res.json();
-      if (data.success) {
-        setIsRegistering(false);
-        setLoginId(data.id); // Use the auto-generated ID from server
-        setLoginPassword(regData.password);
-        setError(`Registration successful! Your School ID is: ${data.id}. Please login.`);
-        setView('login');
-      } else {
-        setError(data.message);
+      // Generate ID: SCC-26-XXXXXX
+      const year = new Date().getFullYear().toString().slice(-2);
+      const random = Math.floor(10000000 + Math.random() * 90000000);
+      const generatedId = `SCC-${year}-${random}`;
+
+      const newUser = {
+        ...regData,
+        id: generatedId,
+        status: regData.role === 'admin' ? 'approved' : 'pending',
+        balance: 0,
+        grades: [],
+        schedule: []
+      };
+
+      const { error } = await supabase
+        .from('users')
+        .insert(newUser);
+
+      if (error) {
+        setError(error.message);
+        return;
       }
+
+      setIsRegistering(false);
+      setLoginId(generatedId);
+      setLoginPassword(regData.password);
+      setError(`Registration successful! Your School ID is: ${generatedId}. Please login once approved.`);
+      setView('login');
+
+      // Log audit
+      await supabase.from('audit_logs').insert({
+        action: 'REGISTER',
+        userId: generatedId,
+        timestamp: new Date().toISOString(),
+        details: `New user ${generatedId} registered as ${regData.role}`
+      });
+
     } catch (err) {
       console.error('Register error:', err);
       setError('Registration failed. Connection error.');
@@ -1289,14 +1317,20 @@ function FacultyDashboard({
 
   const handleRecommendation = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(getApiUrl('/api/recommendations'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...recData, facultyId: user.id, facultyName: user.name }),
-    });
-    setShowRecModal(false);
-    setRecData({ studentId: '', studentName: '', content: '' });
-    fetchRecommendations();
+    const { error } = await supabase
+      .from('recommendations')
+      .insert({ 
+        ...recData, 
+        facultyId: user.id, 
+        facultyName: user.name,
+        date: new Date().toISOString()
+      });
+    
+    if (!error) {
+      setShowRecModal(false);
+      setRecData({ studentId: '', studentName: '', content: '' });
+      fetchRecommendations();
+    }
   };
 
   const handleStudentSelect = (studentName: string) => {
@@ -2152,18 +2186,19 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/forgot-password'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schoolId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setQuestion(data.securityQuestion);
-        setStep(2);
-      } else {
-        setError(data.message);
+      const { data, error } = await supabase
+        .from('users')
+        .select('securityQuestion')
+        .eq('id', schoolId)
+        .single();
+
+      if (error || !data) {
+        setError('User not found');
+        return;
       }
+
+      setQuestion(data.securityQuestion || 'No security question set');
+      setStep(2);
     } catch (err) {
       setError('Failed to fetch question');
     } finally {
@@ -2179,18 +2214,34 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
     }
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/reset-password'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schoolId, securityAnswer: answer, newPassword }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setError('Password reset successful! Please login.');
-        onBack();
-      } else {
-        setError(data.message);
+      const { data: user, error: fetchError } = await supabase
+        .from('users')
+        .select('securityAnswer')
+        .eq('id', schoolId)
+        .single();
+
+      if (fetchError || !user) {
+        setError('User not found');
+        return;
       }
+
+      if (user.securityAnswer !== answer) {
+        setError('Incorrect security answer');
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ password: newPassword })
+        .eq('id', schoolId);
+
+      if (updateError) {
+        setError('Failed to update password');
+        return;
+      }
+
+      setError('Password reset successful! Please login.');
+      onBack();
     } catch (err) {
       setError('Reset failed');
     } finally {
@@ -2202,11 +2253,17 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
     if (!requestName) return;
 
     try {
-      await fetch(getApiUrl('/api/auth/request-reset'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schoolId, name: requestName }),
-      });
+      const { error } = await supabase
+        .from('reset_requests')
+        .insert({ 
+          schoolId, 
+          name: requestName, 
+          status: 'pending',
+          timestamp: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
       setError('Request sent to admin. Please wait for approval.');
       setShowRequestModal(false);
       onBack();
@@ -2515,14 +2572,15 @@ function Profile({ user, setUser, isDarkMode }: { user: UserData, setUser: any, 
   const [uploading, setUploading] = useState(false);
 
   const handleUpdate = async () => {
-    const res = await fetch(getApiUrl(`/api/users/${user.id}`), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setUser(data.user);
+    const { data, error } = await supabase
+      .from('users')
+      .update(formData)
+      .eq('id', user.id)
+      .select()
+      .single();
+    
+    if (!error && data) {
+      setUser(data);
       setEditing(false);
     }
   };
@@ -2536,14 +2594,15 @@ function Profile({ user, setUser, isDarkMode }: { user: UserData, setUser: any, 
     reader.onloadend = async () => {
       const base64String = reader.result as string;
       try {
-        const res = await fetch(getApiUrl('/api/users/profile-pic'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schoolId: user.id, profilePic: base64String }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          setUser(data.user);
+        const { data, error } = await supabase
+          .from('users')
+          .update({ profilePic: base64String })
+          .eq('id', user.id)
+          .select()
+          .single();
+        
+        if (!error && data) {
+          setUser(data);
         }
       } catch (err) {
         console.error('Upload failed', err);
@@ -2784,19 +2843,22 @@ function FinancialAid({ user, financialAid, fetchFinancialAid, isDarkMode }: { u
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(getApiUrl('/api/financial-aid'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+    const { error } = await supabase
+      .from('financial_aid')
+      .insert({ 
         program: formData.type, 
-        amount: formData.amount, 
+        amount: parseFloat(formData.amount), 
         reason: formData.reason, 
         studentId: user.id, 
-        studentName: user.name 
-      }),
-    });
-    setShowApply(false);
-    fetchFinancialAid();
+        studentName: user.name,
+        date: new Date().toISOString(),
+        status: 'pending'
+      });
+    
+    if (!error) {
+      setShowApply(false);
+      fetchFinancialAid();
+    }
   };
 
   return (
@@ -2957,13 +3019,19 @@ function Messages({ user, messages, fetchMessages, users, isDarkMode }: { user: 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser || !text) return;
-    await fetch(getApiUrl('/api/messages'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: user.id, to: selectedUser.id, content: text }),
-    });
-    setText('');
-    fetchMessages();
+    const { error } = await supabase
+      .from('messages')
+      .insert({ 
+        from: user.id, 
+        to: selectedUser.id, 
+        content: text,
+        timestamp: new Date().toISOString()
+      });
+    
+    if (!error) {
+      setText('');
+      fetchMessages();
+    }
   };
 
   const filteredMessages = messages.filter(m => 
@@ -3164,14 +3232,18 @@ function Announcements({ announcements, user, isDarkMode, fetchAnnouncements }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(getApiUrl('/api/announcements'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    setShowForm(false);
-    setFormData({ title: '', content: '', role: 'all' });
-    fetchAnnouncements();
+    const { error } = await supabase
+      .from('announcements')
+      .insert({ 
+        ...formData, 
+        date: new Date().toISOString() 
+      });
+    
+    if (!error) {
+      setShowForm(false);
+      setFormData({ title: '', content: '', role: 'all' });
+      fetchAnnouncements();
+    }
   };
 
   return (
@@ -3309,55 +3381,109 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
   }, [activeTab]);
 
   const handleApproveUser = async (userId: string, status: 'approved' | 'rejected') => {
-    await fetch(getApiUrl('/api/admin/approve-user'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, status }),
-    });
-    fetchUsers();
+    const { error } = await supabase
+      .from('users')
+      .update({ status })
+      .eq('id', userId);
+    
+    if (!error) {
+      await supabase.from('audit_logs').insert({
+        userId: 'ADMIN',
+        action: 'USER_APPROVAL',
+        details: `${status.toUpperCase()} user ${userId}`,
+        timestamp: new Date().toISOString()
+      });
+      fetchUsers();
+    }
   };
 
   const fetchResetRequests = async () => {
-    const res = await fetch(getApiUrl('/api/admin/reset-requests'));
-    const data = await res.json();
-    setResetRequests(data);
+    const { data, error } = await supabase
+      .from('reset_requests')
+      .select('*')
+      .order('timestamp', { ascending: false });
+    
+    if (!error && data) {
+      setResetRequests(data);
+    }
   };
 
   const fetchAuditLogs = async () => {
-    const res = await fetch(getApiUrl('/api/admin/audit-logs'));
-    const data = await res.json();
-    setAuditLogs(data);
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('timestamp', { ascending: false });
+    
+    if (!error && data) {
+      setAuditLogs(data);
+    }
   };
 
   const handleApproveReset = async () => {
     if (!newPassword || !approveReset) return;
 
-    await fetch(getApiUrl('/api/admin/approve-reset'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: approveReset.id, newPassword }),
-    });
-    setApproveReset(null);
-    setNewPassword('');
-    fetchResetRequests();
+    const { error } = await supabase
+      .from('users')
+      .update({ password: newPassword })
+      .eq('id', approveReset.schoolId);
+
+    if (!error) {
+      await supabase.from('audit_logs').insert({
+        userId: 'ADMIN',
+        action: 'PASSWORD_RESET_ADMIN',
+        details: `Reset password for user ${approveReset.schoolId}`,
+        timestamp: new Date().toISOString()
+      });
+      await supabase.from('reset_requests').delete().eq('id', approveReset.id);
+      setApproveReset(null);
+      setNewPassword('');
+      fetchResetRequests();
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(getApiUrl('/api/auth/register'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    setShowAdd(false);
-    fetchUsers();
+    // Generate ID if not provided
+    let finalId = formData.id;
+    if (!finalId) {
+      const year = new Date().getFullYear().toString().slice(-2);
+      const random = Math.floor(10000000 + Math.random() * 90000000);
+      finalId = `SCC-${year}-${random}`;
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .insert({ ...formData, id: finalId, status: 'approved', balance: 0, grades: [], schedule: [] });
+    
+    if (!error) {
+      await supabase.from('audit_logs').insert({
+        userId: 'ADMIN',
+        action: 'USER_CREATED',
+        details: `Created ${formData.role} account: ${finalId}`,
+        timestamp: new Date().toISOString()
+      });
+      setShowAdd(false);
+      fetchUsers();
+    }
   };
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
-    await fetch(getApiUrl(`/api/users/${confirmDelete}`), { method: 'DELETE' });
-    setConfirmDelete(null);
-    fetchUsers();
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', confirmDelete);
+    
+    if (!error) {
+      await supabase.from('audit_logs').insert({
+        userId: 'ADMIN',
+        action: 'USER_DELETED',
+        details: `Deleted user ${confirmDelete}`,
+        timestamp: new Date().toISOString()
+      });
+      setConfirmDelete(null);
+      fetchUsers();
+    }
   };
 
   return (
@@ -3637,7 +3763,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {[...auditLogs].reverse().map(log => (
+                {auditLogs.map(log => (
                   <tr key={log.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6 text-xs font-mono text-slate-400">
                       {new Date(log.timestamp).toLocaleString()}
@@ -3842,12 +3968,14 @@ const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fet
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(getApiUrl('/api/scholarships'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newScholarship)
-      });
-      if (response.ok) {
+      const { error } = await supabase
+        .from('scholarships')
+        .insert({
+          ...newScholarship,
+          amount: newScholarship.amount
+        });
+      
+      if (!error) {
         setIsAdding(false);
         setNewScholarship({ name: '', description: '', criteria: '', deadline: '', amount: '' });
         fetchScholarships?.();
@@ -4261,9 +4389,16 @@ const ActivityView = ({ isDarkMode }: any) => {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    fetch(getApiUrl('/api/audit-logs'))
-      .then(res => res.json())
-      .then(data => setLogs(data));
+    const fetchAuditLogs = async () => {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('timestamp', { ascending: false });
+      if (!error && data) {
+        setLogs(data);
+      }
+    };
+    fetchAuditLogs();
   }, []);
 
   return (
@@ -4292,7 +4427,7 @@ const ActivityView = ({ isDarkMode }: any) => {
               </tr>
             </thead>
             <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-              {[...logs].reverse().map((log: any) => (
+              {logs.map((log: any) => (
                 <tr key={log.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                   <td className="px-8 py-6 text-xs font-mono text-slate-400">
                     {new Date(log.timestamp).toLocaleString()}
@@ -4353,12 +4488,16 @@ const RecommendationsView = ({ recommendations, user, isDarkMode, fetchRecommend
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(getApiUrl('/api/recommendations'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newRec, facultyId: user.id, facultyName: user.name })
-      });
-      if (response.ok) {
+      const { error } = await supabase
+        .from('recommendations')
+        .insert({ 
+          ...newRec, 
+          facultyId: user.id, 
+          facultyName: user.name,
+          date: new Date().toISOString()
+        });
+      
+      if (!error) {
         setIsAdding(false);
         setNewRec({ studentName: '', studentId: '', content: '' });
         fetchRecommendations?.();
