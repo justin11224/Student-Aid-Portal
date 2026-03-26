@@ -1297,7 +1297,7 @@ function StudentDashboard({
   scholarships?: any[], 
   announcements?: any[] 
 }) {
-  const myApplications = financialAid.filter(a => a.studentId === user.id);
+  const myApplications = (financialAid || []).filter(a => a.studentId === user.id);
   const approvedAid = myApplications.filter(a => a.status === 'approved').reduce((acc, curr) => acc + (parseInt(curr.amount?.replace(/[^0-9]/g, '') || '0')), 0);
   const pendingApps = myApplications.filter(a => a.status === 'pending').length;
 
@@ -1337,8 +1337,8 @@ function StudentDashboard({
                 )}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-black">{app.program}</h4>
-                      <p className="text-xs text-slate-400">{app.id.toString().slice(-8)} • {new Date(app.date).toLocaleDateString()}</p>
+                      <h4 className="font-black">{app.program || 'N/A'}</h4>
+                      <p className="text-xs text-slate-400">{app.id?.toString().slice(-8) || 'N/A'} • {app.date ? new Date(app.date).toLocaleDateString() : 'N/A'}</p>
                     </div>
                     <span className={cn(
                       "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
@@ -1421,11 +1421,11 @@ function StudentDashboard({
           )}>
             <h3 className="text-xl font-bold mb-6">Announcements</h3>
             <div className="space-y-6">
-              {announcements.slice(0, 3).map((a, i) => (
+              {(announcements || []).slice(0, 3).map((a, i) => (
                 <div key={i} className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 space-y-2 group cursor-pointer hover:border-red-600/30 transition-all" onClick={() => setView('announcements')}>
-                  <h4 className="font-black text-sm group-hover:text-red-600 transition-colors">{a.title}</h4>
-                  <p className="text-xs text-slate-400 line-clamp-2">{a.content}</p>
-                  <p className="text-[10px] font-bold text-slate-500">{a.date} • {a.author}</p>
+                  <h4 className="font-black text-sm group-hover:text-red-600 transition-colors">{a.title || 'No Title'}</h4>
+                  <p className="text-xs text-slate-400 line-clamp-2">{a.content || 'No Content'}</p>
+                  <p className="text-[10px] font-bold text-slate-500">{a.date || 'N/A'} • {a.author || 'Unknown'}</p>
                 </div>
               ))}
             </div>
@@ -1437,13 +1437,13 @@ function StudentDashboard({
           )}>
             <h3 className="text-xl font-bold mb-6">Available Scholarships</h3>
             <div className="space-y-6">
-              {scholarships.slice(0, 5).map((s, i) => (
+              {(scholarships || []).slice(0, 5).map((s, i) => (
                 <div key={i} className="flex items-center justify-between group cursor-pointer" onClick={() => setView('finance')}>
                   <div>
-                    <h4 className="font-black text-sm group-hover:text-red-600 transition-colors">{s.name}</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Deadline: {s.deadline} • GPA {s.gpa}</p>
+                    <h4 className="font-black text-sm group-hover:text-red-600 transition-colors">{s.name || 'No Name'}</h4>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Deadline: {s.deadline || 'N/A'} • GPA {s.gpa || 'N/A'}</p>
                   </div>
-                  <span className="text-sm font-black text-emerald-500">{s.amount}</span>
+                  <span className="text-sm font-black text-emerald-500">{s.amount || 'N/A'}</span>
                 </div>
               ))}
               <button 
@@ -1494,7 +1494,7 @@ function FacultyDashboard({
     }
   }, [selectedStudentForRec]);
 
-  const students = users.filter(u => u.role === 'student');
+  const students = (users || []).filter(u => u.role === 'student');
 
   const handleRecommendation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1523,9 +1523,9 @@ function FacultyDashboard({
     }
   };
 
-  const myRecommendations = recommendations.filter((r: any) => r.facultyId === user.id);
+  const myRecommendations = (recommendations || []).filter((r: any) => r.facultyId === user.id);
 
-  const assignedApplications = financialAid.filter(app => app.facultyId === user.id || app.status === 'pending').slice(0, 5);
+  const assignedApplications = (financialAid || []).filter(app => app.facultyId === user.id || app.status === 'pending').slice(0, 5);
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
@@ -1745,9 +1745,9 @@ function StaffDashboard({
   updateFinancialAidStatus: (id: number, status: string) => void,
   setView: (view: string) => void
 }) {
-  const recentApplications = financialAid.slice(-5).reverse();
-  const pendingApps = financialAid.filter(a => a.status === 'pending').length;
-  const reviewApps = financialAid.filter(a => a.status === 'review').length;
+  const recentApplications = (financialAid || []).slice(-5).reverse();
+  const pendingApps = (financialAid || []).filter(a => a.status === 'pending').length;
+  const reviewApps = (financialAid || []).filter(a => a.status === 'review').length;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
@@ -1794,9 +1794,9 @@ function StaffDashboard({
             <tbody className="divide-y divide-slate-100 dark:divide-white/5">
               {recentApplications.map((app, i) => (
                 <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4 text-xs font-bold text-slate-500">{app.id.toString().slice(-8)}</td>
-                  <td className="px-6 py-4 text-sm font-black">{app.studentName}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-slate-500">{app.program}</td>
+                  <td className="px-6 py-4 text-xs font-bold text-slate-500">{app.id?.toString().slice(-8) || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm font-black">{app.studentName || 'Unknown Student'}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-slate-500">{app.program || 'N/A'}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {app.docs === 'Complete' ? (
@@ -1818,7 +1818,7 @@ function StaffDashboard({
                       app.status === 'review' ? "bg-blue-500/10 text-blue-500" :
                       "bg-red-500/10 text-red-500"
                     )}>
-                      {app.status}
+                      {app.status || 'Unknown'}
                     </span>
                   </td>
                     <td className="px-6 py-4 text-right">
@@ -2055,7 +2055,7 @@ function AdminDashboard({
       days[`Nov ${i}`] = 0;
     }
 
-    financialAid.forEach(a => {
+    (financialAid || []).forEach(a => {
       const date = new Date(a.date);
       // Check if it's Nov 2024 (Month 10 is November)
       if (date.getMonth() === 10 && date.getFullYear() === 2024) {
@@ -2071,15 +2071,15 @@ function AdminDashboard({
     return Object.entries(days).map(([name, value]) => ({ name, value }));
   })();
 
-  const recentApplications = financialAid.slice(-5).reverse();
-  const pendingApps = financialAid.filter(a => a.status === 'pending').length;
-  const totalAid = financialAid.reduce((acc, curr) => acc + (parseInt(curr.amount?.replace(/[^0-9]/g, '') || '0')), 0);
+  const recentApplications = (financialAid || []).slice(-5).reverse();
+  const pendingApps = (financialAid || []).filter(a => a.status === 'pending').length;
+  const totalAid = (financialAid || []).reduce((acc, curr) => acc + (parseInt(curr.amount?.toString().replace(/[^0-9]/g, '') || '0')), 0);
 
-  const studentCount = users.filter(u => u.role === 'student').length;
-  const facultyCount = users.filter(u => u.role === 'faculty').length;
-  const staffCount = users.filter(u => u.role === 'staff').length;
-  const adminCount = users.filter(u => u.role === 'admin').length;
-  const totalUsers = users.length;
+  const studentCount = (users || []).filter(u => u.role === 'student').length;
+  const facultyCount = (users || []).filter(u => u.role === 'faculty').length;
+  const staffCount = (users || []).filter(u => u.role === 'staff').length;
+  const adminCount = (users || []).filter(u => u.role === 'admin').length;
+  const totalUsers = (users || []).length;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
@@ -2090,8 +2090,8 @@ function AdminDashboard({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <StatCard icon={<Users />} label="Total Users" value={totalUsers.toString()} trend="+2 this week" color="purple" isDarkMode={isDarkMode} />
-        <StatCard icon={<FileText />} label="Applications" value={financialAid.length.toString()} trend={`${pendingApps} pending`} color="blue" isDarkMode={isDarkMode} />
-        <StatCard icon={<Award />} label="Programs" value={scholarships.length.toString()} trend="Active" color="amber" isDarkMode={isDarkMode} />
+        <StatCard icon={<FileText />} label="Applications" value={(financialAid || []).length.toString()} trend={`${pendingApps} pending`} color="blue" isDarkMode={isDarkMode} />
+        <StatCard icon={<Award />} label="Programs" value={(scholarships || []).length.toString()} trend="Active" color="amber" isDarkMode={isDarkMode} />
         <StatCard icon={<Clock />} label="Pending Review" value={pendingApps.toString()} trend="Action required" color="indigo" isDarkMode={isDarkMode} />
         <StatCard icon={<CheckCircle />} label="Aid Disbursed" value={`₱${totalAid.toLocaleString()}`} trend="Total this year" color="emerald" isDarkMode={isDarkMode} />
         <StatCard icon={<TrendingUp />} label="System Uptime" value="99.9%" trend="Optimal" color="red" isDarkMode={isDarkMode} />
@@ -2185,13 +2185,13 @@ function AdminDashboard({
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div className={cn("p-6 rounded-3xl", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Programs</p>
-              <p className="text-3xl font-black">{scholarships.length}</p>
+              <p className="text-3xl font-black">{(scholarships || []).length}</p>
             </div>
             <div className={cn("p-6 rounded-3xl", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Avg. Disbursement</p>
               <p className="text-3xl font-black">
-                ₱{financialAid.filter(a => a.status === 'approved').length > 0 
-                  ? Math.round(financialAid.filter(a => a.status === 'approved').reduce((acc, curr) => acc + (parseInt(curr.amount?.replace(/[^0-9]/g, '') || '0')), 0) / financialAid.filter(a => a.status === 'approved').length).toLocaleString()
+                ₱{(financialAid || []).filter(a => a.status === 'approved').length > 0 
+                  ? Math.round((financialAid || []).filter(a => a.status === 'approved').reduce((acc, curr) => acc + (parseInt(curr.amount?.toString().replace(/[^0-9]/g, '') || '0')), 0) / (financialAid || []).filter(a => a.status === 'approved').length).toLocaleString()
                   : '0'}
               </p>
             </div>
@@ -2199,9 +2199,9 @@ function AdminDashboard({
 
           <div className="space-y-4">
             <p className="text-sm font-bold text-slate-500 mb-2">Applications per Program</p>
-            {scholarships.map(s => {
-              const count = financialAid.filter(a => a.program === s.name).length;
-              const total = financialAid.length || 1;
+            {(scholarships || []).map(s => {
+              const count = (financialAid || []).filter(a => a.program === s.name).length;
+              const total = (financialAid || []).length || 1;
               const percent = (count / total) * 100;
               return (
                 <div key={s.id} className="space-y-2">
@@ -2232,10 +2232,10 @@ function AdminDashboard({
               <div key={i} className="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold">
-                    {app.studentName[0]}
+                    {app.studentName?.[0] || '?'}
                   </div>
                   <div>
-                    <p className="font-bold text-sm">{app.studentName}</p>
+                    <p className="font-bold text-sm">{app.studentName || 'Unknown Student'}</p>
                     <p className="text-xs text-slate-500">{app.program}</p>
                   </div>
                 </div>
@@ -2285,8 +2285,8 @@ function AdminDashboard({
             <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
               {recentApplications.map((app, i) => (
                 <tr key={i} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
-                  <td className="px-6 py-4 text-xs font-bold text-slate-500">{app.id.toString().slice(-8)}</td>
-                  <td className="px-6 py-4 text-sm font-black">{app.studentName}</td>
+                  <td className="px-6 py-4 text-xs font-bold text-slate-500">{app.id?.toString().slice(-8) || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm font-black">{app.studentName || 'Unknown Student'}</td>
                   <td className="px-6 py-4 text-sm font-bold text-slate-500">{app.program}</td>
                   <td className="px-6 py-4 text-sm font-black text-emerald-500">{app.amount}</td>
                   <td className="px-6 py-4">
@@ -2862,7 +2862,7 @@ function Profile({ user, setUser, isDarkMode }: { user: UserData, setUser: any, 
                   {user.profilePic ? (
                     <img src={user.profilePic} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
-                    user.name[0]
+                    user.name?.[0] || '?'
                   )}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <Camera className="w-8 h-8 text-white" />
@@ -3868,9 +3868,9 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
             )}
           >
             Approvals
-            {users.filter(u => u.status === 'pending').length > 0 && (
+            {(users || []).filter(u => u.status === 'pending').length > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-[#0A0A0A]">
-                {users.filter(u => u.status === 'pending').length}
+                {(users || []).filter(u => u.status === 'pending').length}
               </span>
             )}
           </button>
@@ -3884,9 +3884,9 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
             )}
           >
             Reset Requests
-            {resetRequests.filter(r => r.status === 'pending').length > 0 && (
+            {(resetRequests || []).filter(r => r.status === 'pending').length > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-[#0A0A0A]">
-                {resetRequests.filter(r => r.status === 'pending').length}
+                {(resetRequests || []).filter(r => r.status === 'pending').length}
               </span>
             )}
           </button>
@@ -3943,10 +3943,10 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {users.filter(u => 
+                {(users || []).filter(u => 
                   u.status !== 'pending' && 
-                  (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                   u.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  (u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   u.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                    (u.course && u.course.toLowerCase().includes(searchTerm.toLowerCase())))
                 ).map(u => (
                   <tr key={u.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
@@ -3956,7 +3956,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                           {u.profilePic ? (
                             <img src={u.profilePic} alt={u.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
-                            u.name[0]
+                            u.name?.[0] || '?'
                           )}
                         </div>
                         <div>
@@ -4015,20 +4015,20 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {users.filter(u => 
+                {(users || []).filter(u => 
                   u.status === 'pending' && 
-                  (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                   u.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  (u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   u.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                    (u.course && u.course.toLowerCase().includes(searchTerm.toLowerCase())))
                 ).map(u => (
                   <tr key={u.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center font-black text-red-500 text-xl overflow-hidden">
-                          {u.name[0]}
+                          {u.name?.[0] || '?'}
                         </div>
                         <div>
-                          <p className="font-bold text-lg">{u.name}</p>
+                          <p className="font-bold text-lg">{u.name || 'Unknown'}</p>
                           <p className={cn("text-xs font-mono", isDarkMode ? "text-red-400" : "text-red-600")}>{u.id}</p>
                         </div>
                       </div>
@@ -4059,7 +4059,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                     </td>
                   </tr>
                 ))}
-                {users.filter(u => u.status === 'pending').length === 0 && (
+                {(users || []).filter(u => u.status === 'pending').length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-8 py-20 text-center text-slate-400">
                       No pending registrations.
@@ -4086,14 +4086,14 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {resetRequests.map(r => (
+                {(resetRequests || []).map(r => (
                   <tr key={r.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6">
                       <p className="font-bold">{r.name}</p>
                       <p className="text-xs text-slate-400">{r.schoolId}</p>
                     </td>
                     <td className="px-8 py-6 text-sm text-slate-400">
-                      {new Date(r.date).toLocaleDateString()}
+                      {r.date ? new Date(r.date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-8 py-6">
                       <span className={cn(
@@ -4115,7 +4115,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                     </td>
                   </tr>
                 ))}
-                {resetRequests.length === 0 && (
+                {(resetRequests || []).length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-8 py-20 text-center text-slate-400">
                       No reset requests found.
@@ -4142,10 +4142,10 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {auditLogs.map(log => (
+                {(auditLogs || []).map(log => (
                   <tr key={log.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6 text-xs font-mono text-slate-400">
-                      {new Date(log.timestamp).toLocaleString()}
+                      {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}
                     </td>
                     <td className="px-8 py-6 font-bold text-sm">
                       {log.userId}
