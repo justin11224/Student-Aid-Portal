@@ -133,6 +133,16 @@ export default function App() {
     }
   }, [user]);
 
+  // Generate ID for registration
+  useEffect(() => {
+    if (isRegistering && !regData.id) {
+      const year = new Date().getFullYear().toString().slice(-2);
+      const random = Math.floor(10000000 + Math.random() * 90000000);
+      const generatedId = `SCC-${year}-${random}`;
+      setRegData(prev => ({ ...prev, id: generatedId }));
+    }
+  }, [isRegistering, regData.id]);
+
   const fetchPolicies = async () => {
     const { data, error } = await supabase
       .from('policies')
@@ -352,14 +362,8 @@ export default function App() {
     e.preventDefault();
     setError('');
     try {
-      // Generate ID: SCC-26-XXXXXX
-      const year = new Date().getFullYear().toString().slice(-2);
-      const random = Math.floor(10000000 + Math.random() * 90000000);
-      const generatedId = `SCC-${year}-${random}`;
-
       const newUser = {
         ...regData,
-        id: generatedId,
         status: regData.role === 'admin' ? 'approved' : 'pending',
         balance: 0,
         grades: [],
@@ -375,18 +379,32 @@ export default function App() {
         return;
       }
 
+      const registeredId = regData.id;
       setIsRegistering(false);
-      setLoginId(generatedId);
+      setLoginId(registeredId);
       setLoginPassword(regData.password);
-      setError(`Registration successful! Your School ID is: ${generatedId}. Please login once approved.`);
+      setError(`Registration successful! Your School ID is: ${registeredId}. Please login once approved. (Much better to screenshot this!)`);
       setView('login');
 
       // Log audit
       await supabase.from('audit_logs').insert({
         action: 'REGISTER',
-        userId: generatedId,
+        userId: registeredId,
         timestamp: new Date().toISOString(),
-        details: `New user ${generatedId} registered as ${regData.role}`
+        details: `New user ${registeredId} registered as ${regData.role}`
+      });
+
+      // Reset registration data for next time
+      setRegData({ 
+        id: '', 
+        surname: '', 
+        name: '', 
+        role: 'student' as Role, 
+        course: 'BSIT', 
+        yearLevel: '1st Year',
+        password: '',
+        securityQuestion: 'What is your favorite color?',
+        securityAnswer: ''
       });
 
     } catch (err) {
@@ -402,6 +420,17 @@ export default function App() {
     setLoginPassword('');
     setIsRegistering(false);
     setIsForgotPassword(false);
+    setRegData({ 
+      id: '', 
+      surname: '', 
+      name: '', 
+      role: 'student' as Role, 
+      course: 'BSIT', 
+      yearLevel: '1st Year',
+      password: '',
+      securityQuestion: 'What is your favorite color?',
+      securityAnswer: ''
+    });
   };
 
   if (!user && view === 'landing') {
@@ -519,6 +548,15 @@ export default function App() {
                   </div>
                   <h1 className="text-3xl font-bold text-[#1a2b4b]">Create Account</h1>
                   <p className="text-stone-500 mt-2">Join the Student Aid Portal</p>
+                </div>
+
+                <div className="p-4 bg-stone-50 border border-stone-200 rounded-2xl mb-6">
+                  <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Assigned School ID</label>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xl font-mono font-black text-red-600">{regData.id || 'Generating...'}</p>
+                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">Read Only</span>
+                  </div>
+                  <p className="text-[10px] text-stone-500 mt-2 italic">Please remember this ID. You will use it to log in once your account is approved. (Much better to screenshot this!)</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
