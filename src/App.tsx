@@ -87,8 +87,14 @@ interface UserData {
 }
 
 export default function App() {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [view, setView] = useState<string>('landing');
+  const [user, setUser] = useState<UserData | null>(() => {
+    const saved = localStorage.getItem('aid_portal_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [view, setView] = useState<string>(() => {
+    const saved = localStorage.getItem('aid_portal_view');
+    return saved || 'landing';
+  });
   const [isRegistering, setIsRegistering] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loginId, setLoginId] = useState('');
@@ -113,7 +119,10 @@ export default function App() {
   const [scholarships, setScholarships] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('aid_portal_dark_mode');
+    return saved === 'true';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ users: UserData[], announcements: any[], applications: any[] } | null>(null);
@@ -126,6 +135,26 @@ export default function App() {
     onConfirm: () => void;
     type: 'danger' | 'warning';
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
+
+  const [selectedScholarship, setSelectedScholarship] = useState<string | null>(null);
+  const [selectedStudentForRec, setSelectedStudentForRec] = useState<{id: string, name: string} | null>(null);
+
+  // Persist state
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('aid_portal_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('aid_portal_user');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    localStorage.setItem('aid_portal_view', view);
+  }, [view]);
+
+  useEffect(() => {
+    localStorage.setItem('aid_portal_dark_mode', isDarkMode.toString());
+  }, [isDarkMode]);
 
   // Fetch data
   useEffect(() => {
@@ -961,25 +990,25 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
-              user.role === 'admin' ? <AdminDashboard user={user} isDarkMode={isDarkMode} users={users} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} /> :
-              user.role === 'faculty' ? <FacultyDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} recommendations={recommendations} fetchRecommendations={fetchRecommendations} users={users} /> :
-              user.role === 'staff' ? <StaffDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} /> :
+              user.role === 'admin' ? <AdminDashboard user={user} isDarkMode={isDarkMode} users={users} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} setView={setView} /> :
+              user.role === 'faculty' ? <FacultyDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} recommendations={recommendations} fetchRecommendations={fetchRecommendations} users={users} setView={setView} selectedStudentForRec={selectedStudentForRec} setSelectedStudentForRec={setSelectedStudentForRec} /> :
+              user.role === 'staff' ? <StaffDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} setView={setView} /> :
               <StudentDashboard user={user} isDarkMode={isDarkMode} setView={setView} announcements={announcements} scholarships={scholarships} financialAid={financialAid} />
             )}
             {view === 'search' && <SearchResults results={searchResults} query={searchQuery} isDarkMode={isDarkMode} />}
             {view === 'profile' && <Profile user={user} setUser={setUser} isDarkMode={isDarkMode} />}
             {view === 'grades' && <Grades user={user} isDarkMode={isDarkMode} />}
             {view === 'schedule' && <Schedule user={user} isDarkMode={isDarkMode} />}
-            {view === 'finance' && <FinancialAid user={user} financialAid={financialAid} fetchFinancialAid={fetchFinancialAid} isDarkMode={isDarkMode} />}
+            {view === 'finance' && <FinancialAid user={user} financialAid={financialAid} fetchFinancialAid={fetchFinancialAid} isDarkMode={isDarkMode} selectedScholarship={selectedScholarship} setSelectedScholarship={setSelectedScholarship} />}
             {view === 'messages' && <Messages user={user} messages={messages} fetchMessages={fetchMessages} users={users} isDarkMode={isDarkMode} />}
             {view === 'documents' && <Documents user={user} isDarkMode={isDarkMode} />}
             {view === 'announcements' && <Announcements announcements={announcements} user={user} isDarkMode={isDarkMode} fetchAnnouncements={fetchAnnouncements} setConfirmConfig={setConfirmConfig} />}
             {view === 'admin' && <AdminPanel users={users} fetchUsers={fetchUsers} isDarkMode={isDarkMode} setConfirmConfig={setConfirmConfig} />}
             {view === 'students' && <StudentsView users={users} isDarkMode={isDarkMode} />}
             {view === 'policies' && <PoliciesView policies={policies} isDarkMode={isDarkMode} />}
-            {view === 'scholarships' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} setView={setView} />}
-            {view === 'programs' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} isAdmin={true} fetchScholarships={fetchScholarships} setView={setView} />}
-            {view === 'applications' && <ApplicationsView financialAid={financialAid} user={user} isDarkMode={isDarkMode} updateFinancialAidStatus={updateFinancialAidStatus} users={users} assignFaculty={assignFaculty} />}
+            {view === 'scholarships' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} setView={setView} setSelectedScholarship={setSelectedScholarship} />}
+            {view === 'programs' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} isAdmin={true} fetchScholarships={fetchScholarships} setView={setView} setSelectedScholarship={setSelectedScholarship} />}
+            {view === 'applications' && <ApplicationsView financialAid={financialAid} user={user} isDarkMode={isDarkMode} updateFinancialAidStatus={updateFinancialAidStatus} users={users} assignFaculty={assignFaculty} setView={setView} setSelectedStudentForRec={setSelectedStudentForRec} />}
             {view === 'reports' && <ReportsView financialAid={financialAid} scholarships={scholarships} isDarkMode={isDarkMode} user={user} />}
             {view === 'activity' && <ActivityView isDarkMode={isDarkMode} />}
             {view === 'recommendations' && <RecommendationsView recommendations={recommendations} user={user} isDarkMode={isDarkMode} fetchRecommendations={fetchRecommendations} users={users} />}
@@ -1438,7 +1467,10 @@ function FacultyDashboard({
   scholarships = [], 
   recommendations = [], 
   fetchRecommendations,
-  users = []
+  users = [],
+  setView,
+  selectedStudentForRec,
+  setSelectedStudentForRec
 }: { 
   user: UserData, 
   isDarkMode?: boolean, 
@@ -1446,10 +1478,21 @@ function FacultyDashboard({
   scholarships?: any[], 
   recommendations?: any[], 
   fetchRecommendations: () => void,
-  users?: UserData[]
+  users?: UserData[],
+  setView: (view: string) => void,
+  selectedStudentForRec: {id: string, name: string} | null,
+  setSelectedStudentForRec: (val: {id: string, name: string} | null) => void
 }) {
   const [showRecModal, setShowRecModal] = useState(false);
   const [recData, setRecData] = useState({ studentId: '', studentName: '', content: '' });
+
+  useEffect(() => {
+    if (selectedStudentForRec) {
+      setRecData({ studentId: selectedStudentForRec.id, studentName: selectedStudentForRec.name, content: '' });
+      setShowRecModal(true);
+      setSelectedStudentForRec(null);
+    }
+  }, [selectedStudentForRec]);
 
   const students = users.filter(u => u.role === 'student');
 
@@ -1532,7 +1575,12 @@ function FacultyDashboard({
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all">Review</button>
+                        <button 
+                          onClick={() => setView('applications')}
+                          className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                        >
+                          Review
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1597,7 +1645,10 @@ function FacultyDashboard({
                 <CheckCircle className="w-5 h-5" />
                 Write Recommendations
               </button>
-              <button className="w-full py-4 rounded-2xl border border-slate-200 dark:border-white/10 font-black hover:bg-slate-50 dark:hover:bg-white/5 transition-all flex items-center justify-center gap-2 text-sm">
+              <button 
+                onClick={() => setView('applications')}
+                className="w-full py-4 rounded-2xl border border-slate-200 dark:border-white/10 font-black hover:bg-slate-50 dark:hover:bg-white/5 transition-all flex items-center justify-center gap-2 text-sm"
+              >
                 <FileText className="w-5 h-5" />
                 View All Assigned
               </button>
@@ -1683,14 +1734,16 @@ function StaffDashboard({
   financialAid = [], 
   scholarships = [], 
   announcements = [],
-  updateFinancialAidStatus
+  updateFinancialAidStatus,
+  setView
 }: { 
   user: UserData, 
   isDarkMode?: boolean, 
   financialAid?: any[], 
   scholarships?: any[], 
   announcements?: any[],
-  updateFinancialAidStatus: (id: number, status: string) => void
+  updateFinancialAidStatus: (id: number, status: string) => void,
+  setView: (view: string) => void
 }) {
   const recentApplications = financialAid.slice(-5).reverse();
   const pendingApps = financialAid.filter(a => a.status === 'pending').length;
@@ -1716,10 +1769,15 @@ function StaffDashboard({
       )}>
         <div className="flex items-center justify-between mb-8">
           <h3 className="text-xl font-bold">Recent Applications</h3>
-          <button className={cn(
-            "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-            isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
-          )}>View All</button>
+          <button 
+            onClick={() => setView('applications')}
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+              isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
+            )}
+          >
+            View All
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -1977,7 +2035,8 @@ function AdminDashboard({
   financialAid = [], 
   scholarships = [], 
   announcements = [],
-  updateFinancialAidStatus
+  updateFinancialAidStatus,
+  setView
 }: { 
   user: UserData, 
   isDarkMode?: boolean, 
@@ -1985,25 +2044,32 @@ function AdminDashboard({
   financialAid?: any[], 
   scholarships?: any[], 
   announcements?: any[],
-  updateFinancialAidStatus: (id: number, status: string) => void
+  updateFinancialAidStatus: (id: number, status: string) => void,
+  setView: (view: string) => void
 }) {
-  const barData = [
-    { name: 'Nov 8', value: 35 },
-    { name: 'Nov 10', value: 52 },
-    { name: 'Nov 12', value: 41 },
-    { name: 'Nov 14', value: 68 },
-    { name: 'Nov 16', value: 80 },
-    { name: 'Nov 18', value: 55 },
-    { name: 'Nov 20', value: 72 },
-    { name: 'Nov 22', value: 90 },
-    { name: 'Nov 24', value: 63 },
-    { name: 'Nov 26', value: 48 },
-    { name: 'Nov 28', value: 75 },
-    { name: 'Nov 30', value: 88 },
-    { name: 'Dec 2', value: 60 },
-    { name: 'Dec 4', value: 95 },
-    { name: 'Dec 6', value: 70 },
-  ];
+  // Generate dynamic barData based on actual financial aid applications for Nov 2024
+  const barData = (() => {
+    const days: { [key: string]: number } = {};
+    // Initialize days for Nov 2024 (1 to 30)
+    for (let i = 1; i <= 30; i++) {
+      days[`Nov ${i}`] = 0;
+    }
+
+    financialAid.forEach(a => {
+      const date = new Date(a.date);
+      // Check if it's Nov 2024 (Month 10 is November)
+      if (date.getMonth() === 10 && date.getFullYear() === 2024) {
+        const day = `Nov ${date.getDate()}`;
+        if (days[day] !== undefined) {
+          days[day]++;
+        }
+      }
+    });
+
+    // If no data for Nov 2024, provide some fallback for visualization if needed, 
+    // but the user asked for database count.
+    return Object.entries(days).map(([name, value]) => ({ name, value }));
+  })();
 
   const recentApplications = financialAid.slice(-5).reverse();
   const pendingApps = financialAid.filter(a => a.status === 'pending').length;
@@ -2082,14 +2148,24 @@ function AdminDashboard({
             ))}
           </div>
           <div className="mt-8 grid grid-cols-2 gap-4">
-            <button className={cn(
-              "py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-              isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
-            )}>Manage Users</button>
-            <button className={cn(
-              "py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-              isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
-            )}>Manage Programs</button>
+            <button 
+              onClick={() => setView('admin')}
+              className={cn(
+                "py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
+              )}
+            >
+              Manage Users
+            </button>
+            <button 
+              onClick={() => setView('programs')}
+              className={cn(
+                "py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
+              )}
+            >
+              Manage Programs
+            </button>
           </div>
         </div>
       </div>
@@ -2184,10 +2260,15 @@ function AdminDashboard({
       )}>
         <div className="flex items-center justify-between mb-8">
           <h3 className="text-xl font-bold">Recent Applications</h3>
-          <button className={cn(
-            "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-            isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
-          )}>View All</button>
+          <button 
+            onClick={() => setView('applications')}
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+              isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-50 hover:bg-slate-100"
+            )}
+          >
+            View All
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -2975,9 +3056,16 @@ function Schedule({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }
   );
 }
 
-function FinancialAid({ user, financialAid, fetchFinancialAid, isDarkMode }: { user: UserData, financialAid: any[], fetchFinancialAid: any, isDarkMode?: boolean }) {
+function FinancialAid({ user, financialAid, fetchFinancialAid, isDarkMode, selectedScholarship, setSelectedScholarship }: { user: UserData, financialAid: any[], fetchFinancialAid: any, isDarkMode?: boolean, selectedScholarship?: string | null, setSelectedScholarship?: any }) {
   const [showApply, setShowApply] = useState(false);
   const [formData, setFormData] = useState({ type: 'Scholarship', amount: '', reason: '' });
+
+  useEffect(() => {
+    if (selectedScholarship) {
+      setFormData(prev => ({ ...prev, type: selectedScholarship }));
+      setShowApply(true);
+    }
+  }, [selectedScholarship]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2995,6 +3083,7 @@ function FinancialAid({ user, financialAid, fetchFinancialAid, isDarkMode }: { u
     
     if (!error) {
       setShowApply(false);
+      setSelectedScholarship?.(null);
       fetchFinancialAid();
     }
   };
@@ -4214,7 +4303,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode, setConfirmConfig }: { users
   );
 }
 
-const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fetchScholarships, setView }: any) => {
+const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fetchScholarships, setView, setSelectedScholarship }: any) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newScholarship, setNewScholarship] = useState({
     name: '',
@@ -4390,7 +4479,10 @@ const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fet
               
               {!isAdmin && user.role === 'student' && (
                 <button 
-                  onClick={() => setView('finance')}
+                  onClick={() => {
+                    setSelectedScholarship(s.name);
+                    setView('finance');
+                  }}
                   className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all"
                 >
                   Apply Now
@@ -4404,9 +4496,11 @@ const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fet
   );
 };
 
-const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidStatus, users = [], assignFaculty }: any) => {
+const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidStatus, users = [], assignFaculty, setView, setSelectedStudentForRec }: any) => {
   const filteredApplications = user.role === 'student' 
     ? financialAid.filter((a: any) => a.studentId === user.id)
+    : user.role === 'faculty'
+    ? financialAid.filter((a: any) => a.facultyId === user.id)
     : financialAid;
 
   const facultyMembers = users.filter((u: any) => u.role === 'faculty');
@@ -4486,9 +4580,20 @@ const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidSt
                       {a.status}
                     </span>
                   </td>
-                  {(user.role === 'admin' || user.role === 'staff') && (
+                  {(user.role === 'admin' || user.role === 'staff' || user.role === 'faculty') && (
                     <td className="px-8 py-6 text-right">
-                      {a.status === 'pending' && (
+                      {user.role === 'faculty' && a.facultyId === user.id && (
+                        <button
+                          onClick={() => {
+                            setSelectedStudentForRec({ id: a.studentId, name: a.studentName });
+                            setView('dashboard');
+                          }}
+                          className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-700 transition-all flex items-center gap-2 ml-auto"
+                        >
+                          <CheckCircle className="w-4 h-4" /> Recommend
+                        </button>
+                      )}
+                      {(user.role === 'admin' || user.role === 'staff') && a.status === 'pending' && (
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => updateFinancialAidStatus(a.id, 'approved')}
