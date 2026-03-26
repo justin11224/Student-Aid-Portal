@@ -59,6 +59,19 @@ import {
   Bar,
   Cell
 } from 'recharts';
+import { isSupabaseConfigured, updateSupabaseConfig, supabase } from './lib/supabase';
+
+// API URL for backend calls
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+const getApiUrl = (path: string) => {
+  if (!API_URL) return path;
+  // Ensure absolute URL
+  const base = API_URL.startsWith('http') ? API_URL : `https://${API_URL}`;
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${cleanBase}${cleanPath}`;
+};
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -72,6 +85,7 @@ interface UserData {
   surname: string;
   name: string;
   role: Role;
+  status?: 'pending' | 'approved' | 'rejected';
   course?: string;
   yearLevel?: string;
   balance?: number;
@@ -132,51 +146,74 @@ export default function App() {
   }, [user]);
 
   const fetchPolicies = async () => {
-    const res = await fetch('/api/policies');
+    const res = await fetch(getApiUrl('/api/policies'));
     const data = await res.json();
     setPolicies(data);
   };
 
   const fetchNotifications = async () => {
     if (!user) return;
-    const res = await fetch(`/api/notifications/${user.id}`);
-    const data = await res.json();
-    setNotifications(data);
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('userId', user.id)
+      .order('timestamp', { ascending: false });
+    
+    if (!error && data) {
+      setNotifications(data);
+    }
   };
 
   const markNotificationsRead = async () => {
     if (!user) return;
-    await fetch('/api/notifications/mark-read', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id }),
-    });
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('userId', user.id);
+    
     fetchNotifications();
   };
 
   const fetchScholarships = async () => {
-    const res = await fetch('/api/scholarships');
-    const data = await res.json();
-    setScholarships(data);
+    const { data, error } = await supabase
+      .from('scholarships')
+      .select('*');
+    
+    if (!error && data) {
+      setScholarships(data);
+    }
   };
 
   const fetchRecommendations = async () => {
-    const res = await fetch('/api/recommendations');
-    const data = await res.json();
-    setRecommendations(data);
+    const { data, error } = await supabase
+      .from('recommendations')
+      .select('*');
+    
+    if (!error && data) {
+      setRecommendations(data);
+    }
   };
 
   const fetchAnnouncements = async () => {
-    const res = await fetch('/api/announcements');
-    const data = await res.json();
-    setAnnouncements(data);
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('date', { ascending: false });
+    
+    if (!error && data) {
+      setAnnouncements(data);
+    }
   };
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      setUsers(data);
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+      
+      if (!error && data) {
+        setUsers(data);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -215,23 +252,65 @@ export default function App() {
 
   const fetchMessages = async () => {
     if (!user) return;
-    const res = await fetch(`/api/messages/${user.id}`);
-    const data = await res.json();
-    setMessages(data);
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`to.eq.${user.id},from.eq.${user.id}`)
+      .order('timestamp', { ascending: true });
+    
+    if (!error && data) {
+      setMessages(data);
+    }
   };
 
   const fetchFinancialAid = async () => {
-    const res = await fetch('/api/financial-aid');
-    const data = await res.json();
-    setFinancialAid(data);
+    const { data, error } = await supabase
+      .from('financial_aid')
+      .select('*');
+    
+    if (!error && data) {
+      setFinancialAid(data);
+    }
   };
 
   const updateFinancialAidStatus = async (id: number, status: string) => {
-    await fetch(`/api/financial-aid/${id}/status`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+    await supabase
+      .from('financial_aid')
+      .update({ status })
+      .eq('id', id);
+    
+    // Create notification for student
+    const app = financialAid.find(a => a.id === id);
+    if (app) {
+      await supabase.from('notifications').insert({
+        userId: app.studentId,
+        title: "Application Update",
+        message: `Your application for ${app.program} has been ${status}`,
+        type: status === 'approved' ? 'success' : 'error',
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    fetchFinancialAid();
+  };
+
+  const assignFaculty = async (applicationId: number, facultyId: string) => {
+    await supabase
+      .from('financial_aid')
+      .update({ facultyId })
+      .eq('id', applicationId);
+    
+    // Create notification for faculty
+    await supabase.from('notifications').insert({
+      userId: facultyId,
+      title: "New Assignment",
+      message: `You have been assigned to review an application.`,
+      type: 'info',
+      read: false,
+      timestamp: new Date().toISOString()
     });
+
     fetchFinancialAid();
   };
 
@@ -239,10 +318,13 @@ export default function App() {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/auth/login', {
+      const url = getApiUrl('/api/auth/login');
+      console.log('Login attempt:', url);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schoolId: loginId, password: loginPassword }),
+        mode: 'cors'
       });
       const data = await res.json();
       if (data.success) {
@@ -252,7 +334,8 @@ export default function App() {
         setError(data.message);
       }
     } catch (err) {
-      setError('Connection failed');
+      console.error('Login error:', err);
+      setError('Connection failed. Please check your internet or API URL.');
     }
   };
 
@@ -260,10 +343,13 @@ export default function App() {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/auth/register', {
+      const url = getApiUrl('/api/auth/register');
+      console.log('Register attempt:', url);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(regData),
+        mode: 'cors'
       });
       const data = await res.json();
       if (data.success) {
@@ -276,7 +362,8 @@ export default function App() {
         setError(data.message);
       }
     } catch (err) {
-      setError('Registration failed');
+      console.error('Register error:', err);
+      setError('Registration failed. Connection error.');
     }
   };
 
@@ -786,7 +873,7 @@ export default function App() {
             {view === 'policies' && <PoliciesView policies={policies} isDarkMode={isDarkMode} />}
             {view === 'scholarships' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} setView={setView} />}
             {view === 'programs' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} isAdmin={true} fetchScholarships={fetchScholarships} setView={setView} />}
-            {view === 'applications' && <ApplicationsView financialAid={financialAid} user={user} isDarkMode={isDarkMode} updateFinancialAidStatus={updateFinancialAidStatus} />}
+            {view === 'applications' && <ApplicationsView financialAid={financialAid} user={user} isDarkMode={isDarkMode} updateFinancialAidStatus={updateFinancialAidStatus} users={users} assignFaculty={assignFaculty} />}
             {view === 'reports' && <ReportsView financialAid={financialAid} scholarships={scholarships} isDarkMode={isDarkMode} user={user} />}
             {view === 'activity' && <ActivityView isDarkMode={isDarkMode} />}
             {view === 'recommendations' && <RecommendationsView recommendations={recommendations} user={user} isDarkMode={isDarkMode} fetchRecommendations={fetchRecommendations} users={users} />}
@@ -1202,7 +1289,7 @@ function FacultyDashboard({
 
   const handleRecommendation = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('/api/recommendations', {
+    await fetch(getApiUrl('/api/recommendations'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...recData, facultyId: user.id, facultyName: user.name }),
@@ -1835,6 +1922,90 @@ function AdminDashboard({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border transition-all",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-bold">Scholarship Impact Report</h3>
+            <div className="p-2 bg-amber-500/10 rounded-xl">
+              <Award className="w-5 h-5 text-amber-500" />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className={cn("p-6 rounded-3xl", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Programs</p>
+              <p className="text-3xl font-black">{scholarships.length}</p>
+            </div>
+            <div className={cn("p-6 rounded-3xl", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Avg. Disbursement</p>
+              <p className="text-3xl font-black">
+                ₱{financialAid.filter(a => a.status === 'approved').length > 0 
+                  ? Math.round(financialAid.filter(a => a.status === 'approved').reduce((acc, curr) => acc + (parseInt(curr.amount?.replace(/[^0-9]/g, '') || '0')), 0) / financialAid.filter(a => a.status === 'approved').length).toLocaleString()
+                  : '0'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm font-bold text-slate-500 mb-2">Applications per Program</p>
+            {scholarships.map(s => {
+              const count = financialAid.filter(a => a.program === s.name).length;
+              const total = financialAid.length || 1;
+              const percent = (count / total) * 100;
+              return (
+                <div key={s.id} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">{s.name}</span>
+                    <span className="font-bold">{count} apps</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }} 
+                      animate={{ width: `${percent}%` }} 
+                      className="h-full bg-amber-500 rounded-full"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={cn(
+          "p-8 rounded-[2.5rem] border transition-all",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <h3 className="text-xl font-bold mb-8">Recent Activity</h3>
+          <div className="space-y-6">
+            {recentApplications.map((app, i) => (
+              <div key={i} className="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold">
+                    {app.studentName[0]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{app.studentName}</p>
+                    <p className="text-xs text-slate-500">{app.program}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-sm">{app.amount}</p>
+                  <span className={cn(
+                    "text-[10px] font-black uppercase tracking-widest",
+                    app.status === 'approved' ? "text-emerald-500" : app.status === 'rejected' ? "text-red-500" : "text-amber-500"
+                  )}>
+                    {app.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className={cn(
         "p-8 rounded-[2.5rem] border transition-all overflow-hidden",
         isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
@@ -1974,11 +2145,14 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestName, setRequestName] = useState('');
+
   const handleGetQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(getApiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schoolId }),
@@ -1988,10 +2162,10 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
         setQuestion(data.securityQuestion);
         setStep(2);
       } else {
-        alert(data.message);
+        setError(data.message);
       }
     } catch (err) {
-      alert('Failed to fetch question');
+      setError('Failed to fetch question');
     } finally {
       setLoading(false);
     }
@@ -2000,12 +2174,12 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(getApiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schoolId, securityAnswer: answer, newPassword }),
@@ -2015,29 +2189,29 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
         setError('Password reset successful! Please login.');
         onBack();
       } else {
-        alert(data.message);
+        setError(data.message);
       }
     } catch (err) {
-      alert('Reset failed');
+      setError('Reset failed');
     } finally {
       setLoading(false);
     }
   };
 
   const handleRequestAdmin = async () => {
-    const name = prompt('Please enter your full name for verification:');
-    if (!name) return;
+    if (!requestName) return;
 
     try {
-      await fetch('/api/auth/request-reset', {
+      await fetch(getApiUrl('/api/auth/request-reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schoolId, name }),
+        body: JSON.stringify({ schoolId, name: requestName }),
       });
-      alert('Request sent to admin. Please wait for approval.');
+      setError('Request sent to admin. Please wait for approval.');
+      setShowRequestModal(false);
       onBack();
     } catch (err) {
-      alert('Failed to send request');
+      setError('Failed to send request');
     }
   };
 
@@ -2083,7 +2257,7 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
             <p className="text-sm text-stone-500 text-center mb-4">Forgot your security question?</p>
             <button 
               type="button"
-              onClick={handleRequestAdmin}
+              onClick={() => setShowRequestModal(true)}
               className="w-full py-4 border-2 border-stone-200 text-stone-700 rounded-2xl font-bold hover:bg-stone-50 transition-all"
             >
               Request Admin Reset
@@ -2142,6 +2316,62 @@ function ForgotPassword({ onBack, isDarkMode, setError }: { onBack: () => void, 
             {loading ? 'Resetting Password...' : 'Update Password'}
           </button>
         </form>
+      )}
+
+      {/* Request Admin Reset Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-stone-100"
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center">
+                <Shield className="w-7 h-7 text-red-600" />
+              </div>
+              <button 
+                onClick={() => setShowRequestModal(false)}
+                className="p-2 hover:bg-stone-50 rounded-xl transition-colors"
+              >
+                <X className="w-6 h-6 text-stone-400" />
+              </button>
+            </div>
+
+            <h3 className="text-2xl font-black text-[#1a2b4b] mb-2">Verification Required</h3>
+            <p className="text-stone-500 mb-6 font-medium">Please enter your full name as registered in the system to request a password reset from the administrator.</p>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-stone-400 uppercase tracking-widest">Full Name</label>
+                <input 
+                  type="text"
+                  value={requestName}
+                  onChange={(e) => setRequestName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="w-full p-4 bg-stone-50 border-2 border-transparent rounded-2xl focus:border-red-600 focus:bg-white outline-none transition-all font-bold"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setShowRequestModal(false)}
+                  className="flex-1 py-4 bg-stone-100 text-stone-600 rounded-2xl font-bold hover:bg-stone-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleRequestAdmin}
+                  disabled={!requestName.trim()}
+                  className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 transition-all shadow-lg shadow-red-200 disabled:opacity-50"
+                >
+                  Confirm Request
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       )}
     </div>
   );
@@ -2285,7 +2515,7 @@ function Profile({ user, setUser, isDarkMode }: { user: UserData, setUser: any, 
   const [uploading, setUploading] = useState(false);
 
   const handleUpdate = async () => {
-    const res = await fetch(`/api/users/${user.id}`, {
+    const res = await fetch(getApiUrl(`/api/users/${user.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
@@ -2306,7 +2536,7 @@ function Profile({ user, setUser, isDarkMode }: { user: UserData, setUser: any, 
     reader.onloadend = async () => {
       const base64String = reader.result as string;
       try {
-        const res = await fetch('/api/users/profile-pic', {
+        const res = await fetch(getApiUrl('/api/users/profile-pic'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ schoolId: user.id, profilePic: base64String }),
@@ -2554,10 +2784,16 @@ function FinancialAid({ user, financialAid, fetchFinancialAid, isDarkMode }: { u
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('/api/financial-aid', {
+    await fetch(getApiUrl('/api/financial-aid'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...formData, userId: user.id, userName: user.name }),
+      body: JSON.stringify({ 
+        program: formData.type, 
+        amount: formData.amount, 
+        reason: formData.reason, 
+        studentId: user.id, 
+        studentName: user.name 
+      }),
     });
     setShowApply(false);
     fetchFinancialAid();
@@ -2621,7 +2857,7 @@ function FinancialAid({ user, financialAid, fetchFinancialAid, isDarkMode }: { u
                       <Shield className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="font-black text-lg">{f.type}</p>
+                      <p className="font-black text-lg">{f.program}</p>
                       <p className={cn("text-xs font-bold", isDarkMode ? "text-slate-500" : "text-slate-400")}>
                         ₱{f.amount} • {new Date(f.date).toLocaleDateString()}
                       </p>
@@ -2721,7 +2957,7 @@ function Messages({ user, messages, fetchMessages, users, isDarkMode }: { user: 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser || !text) return;
-    await fetch('/api/messages', {
+    await fetch(getApiUrl('/api/messages'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: user.id, to: selectedUser.id, content: text }),
@@ -2928,7 +3164,7 @@ function Announcements({ announcements, user, isDarkMode, fetchAnnouncements }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('/api/announcements', {
+    await fetch(getApiUrl('/api/announcements'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
@@ -3057,9 +3293,12 @@ function Announcements({ announcements, user, isDarkMode, fetchAnnouncements }: 
 function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetchUsers: any, isDarkMode?: boolean }) {
   const [showAdd, setShowAdd] = useState(false);
   const [formData, setFormData] = useState({ id: '', name: '', surname: '', role: 'student' as Role, password: 'password', securityQuestion: 'What is your favorite color?', securityAnswer: 'blue' });
-  const [activeTab, setActiveTab] = useState<'users' | 'resets' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'resets' | 'logs'>('users');
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [approveReset, setApproveReset] = useState<any | null>(null);
+  const [newPassword, setNewPassword] = useState('');
 
   useEffect(() => {
     if (activeTab === 'resets') {
@@ -3069,33 +3308,43 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
     }
   }, [activeTab]);
 
+  const handleApproveUser = async (userId: string, status: 'approved' | 'rejected') => {
+    await fetch(getApiUrl('/api/admin/approve-user'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, status }),
+    });
+    fetchUsers();
+  };
+
   const fetchResetRequests = async () => {
-    const res = await fetch('/api/admin/reset-requests');
+    const res = await fetch(getApiUrl('/api/admin/reset-requests'));
     const data = await res.json();
     setResetRequests(data);
   };
 
   const fetchAuditLogs = async () => {
-    const res = await fetch('/api/admin/audit-logs');
+    const res = await fetch(getApiUrl('/api/admin/audit-logs'));
     const data = await res.json();
     setAuditLogs(data);
   };
 
-  const handleApproveReset = async (requestId: number) => {
-    const newPassword = prompt('Enter new password for this user:');
-    if (!newPassword) return;
+  const handleApproveReset = async () => {
+    if (!newPassword || !approveReset) return;
 
-    await fetch('/api/admin/approve-reset', {
+    await fetch(getApiUrl('/api/admin/approve-reset'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId, newPassword }),
+      body: JSON.stringify({ requestId: approveReset.id, newPassword }),
     });
+    setApproveReset(null);
+    setNewPassword('');
     fetchResetRequests();
   };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('/api/auth/register', {
+    await fetch(getApiUrl('/api/auth/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
@@ -3104,11 +3353,11 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
     fetchUsers();
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to deactivate this user?')) {
-      await fetch(`/api/users/${id}`, { method: 'DELETE' });
-      fetchUsers();
-    }
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    await fetch(getApiUrl(`/api/users/${confirmDelete}`), { method: 'DELETE' });
+    setConfirmDelete(null);
+    fetchUsers();
   };
 
   return (
@@ -3129,6 +3378,22 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
             )}
           >
             Users
+          </button>
+          <button 
+            onClick={() => setActiveTab('approvals')}
+            className={cn(
+              "px-6 py-3 rounded-xl font-bold transition-all relative",
+              activeTab === 'approvals' 
+                ? (isDarkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white")
+                : (isDarkMode ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-500")
+            )}
+          >
+            Approvals
+            {users.filter(u => u.status === 'pending').length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-[#0A0A0A]">
+                {users.filter(u => u.status === 'pending').length}
+              </span>
+            )}
           </button>
           <button 
             onClick={() => setActiveTab('resets')}
@@ -3178,11 +3443,12 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                 <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
                   <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">User</th>
                   <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Role</th>
+                  <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Status</th>
                   <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-                {users.map(u => (
+                {users.filter(u => u.status !== 'pending').map(u => (
                   <tr key={u.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
@@ -3207,13 +3473,21 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                         {u.role}
                       </span>
                     </td>
+                    <td className="px-8 py-6">
+                      <span className={cn(
+                        "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest",
+                        u.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                      )}>
+                        {u.status || 'approved'}
+                      </span>
+                    </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex justify-end gap-2">
                         <button className="p-3 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                           <Edit className="w-5 h-5" />
                         </button>
                         <button 
-                          onClick={() => handleDelete(u.id)} 
+                          onClick={() => setConfirmDelete(u.id)} 
                           className="p-3 text-slate-400 hover:text-red-600 transition-colors"
                         >
                           <Trash2 className="w-5 h-5" />
@@ -3222,6 +3496,71 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : activeTab === 'approvals' ? (
+        <div className={cn(
+          "rounded-[2.5rem] border overflow-hidden transition-all",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
+                  <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">User</th>
+                  <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Role</th>
+                  <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
+                {users.filter(u => u.status === 'pending').map(u => (
+                  <tr key={u.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center font-black text-red-500 text-xl overflow-hidden">
+                          {u.name[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold text-lg">{u.name}</p>
+                          <p className={cn("text-xs font-mono", isDarkMode ? "text-red-400" : "text-red-600")}>{u.id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={cn(
+                        "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest",
+                        u.role === 'admin' ? "bg-red-500/10 text-red-500" : u.role === 'faculty' ? "bg-amber-500/10 text-amber-500" : "bg-blue-500/10 text-blue-500"
+                      )}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                      <div className="flex justify-end gap-3">
+                        <button 
+                          onClick={() => handleApproveUser(u.id, 'rejected')}
+                          className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all"
+                        >
+                          Reject
+                        </button>
+                        <button 
+                          onClick={() => handleApproveUser(u.id, 'approved')}
+                          className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100"
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {users.filter(u => u.status === 'pending').length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-8 py-20 text-center text-slate-400">
+                      No pending registrations.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -3262,7 +3601,7 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
                     <td className="px-8 py-6 text-right">
                       {r.status === 'pending' && (
                         <button 
-                          onClick={() => handleApproveReset(r.id)}
+                          onClick={() => setApproveReset(r)}
                           className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all"
                         >
                           Reset Password
@@ -3409,6 +3748,83 @@ function AdminPanel({ users, fetchUsers, isDarkMode }: { users: UserData[], fetc
           </motion.div>
         </div>
       )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={cn(
+            "p-10 rounded-[3rem] w-full max-w-md shadow-2xl border",
+            isDarkMode ? "bg-[#111111] border-white/10 text-white" : "bg-white border-slate-200"
+          )}>
+            <h2 className="text-3xl font-black tracking-tighter mb-4">Deactivate User?</h2>
+            <p className={cn("mb-8", isDarkMode ? "text-slate-400" : "text-slate-500")}>
+              Are you sure you want to deactivate user <span className="font-bold text-red-500">{confirmDelete}</span>? This action cannot be undone.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => setConfirmDelete(null)}
+                className={cn(
+                  "py-4 rounded-2xl font-bold transition-all",
+                  isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-100 hover:bg-slate-200"
+                )}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDelete}
+                className="py-4 rounded-2xl bg-red-600 text-white font-black hover:bg-red-700 shadow-xl shadow-red-200 transition-all"
+              >
+                Deactivate
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {approveReset && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={cn(
+            "p-10 rounded-[3rem] w-full max-w-md shadow-2xl border",
+            isDarkMode ? "bg-[#111111] border-white/10 text-white" : "bg-white border-slate-200"
+          )}>
+            <h2 className="text-3xl font-black tracking-tighter mb-4">Reset Password</h2>
+            <p className={cn("mb-8", isDarkMode ? "text-slate-400" : "text-slate-500")}>
+              Enter a new password for <span className="font-bold text-emerald-500">{approveReset.name}</span>.
+            </p>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">New Password</label>
+                <input 
+                  type="password"
+                  value={newPassword} 
+                  onChange={e => setNewPassword(e.target.value)} 
+                  className={cn(
+                    "w-full p-4 rounded-2xl border font-bold outline-none focus:ring-2 focus:ring-emerald-600 transition-all",
+                    isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200"
+                  )}
+                  required 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => { setApproveReset(null); setNewPassword(''); }}
+                  className={cn(
+                    "py-4 rounded-2xl font-bold transition-all",
+                    isDarkMode ? "bg-white/5 hover:bg-white/10" : "bg-slate-100 hover:bg-slate-200"
+                  )}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleApproveReset}
+                  className="py-4 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-700 shadow-xl shadow-emerald-200 transition-all"
+                >
+                  Approve Reset
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -3426,7 +3842,7 @@ const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fet
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/scholarships', {
+      const response = await fetch(getApiUrl('/api/scholarships'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newScholarship)
@@ -3601,10 +4017,12 @@ const ScholarshipsView = ({ scholarships, user, isDarkMode, isAdmin = false, fet
   );
 };
 
-const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidStatus }: any) => {
+const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidStatus, users = [], assignFaculty }: any) => {
   const filteredApplications = user.role === 'student' 
     ? financialAid.filter((a: any) => a.studentId === user.id)
     : financialAid;
+
+  const facultyMembers = users.filter((u: any) => u.role === 'faculty');
 
   return (
     <motion.div
@@ -3630,6 +4048,7 @@ const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidSt
                 <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Student</th>
                 <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Type</th>
                 <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Date</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Assigned Faculty</th>
                 <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Status</th>
                 {(user.role === 'admin' || user.role === 'staff') && (
                   <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
@@ -3644,10 +4063,31 @@ const ApplicationsView = ({ financialAid, user, isDarkMode, updateFinancialAidSt
                     <p className="text-xs text-slate-400">{a.studentId}</p>
                   </td>
                   <td className="px-8 py-6">
-                    <span className="text-sm font-medium">{a.type}</span>
+                    <span className="text-sm font-medium">{a.program}</span>
                   </td>
                   <td className="px-8 py-6 text-sm text-slate-400">
                     {new Date(a.date).toLocaleDateString()}
+                  </td>
+                  <td className="px-8 py-6">
+                    {(user.role === 'admin' || user.role === 'staff') ? (
+                      <select
+                        value={a.facultyId || ''}
+                        onChange={(e) => assignFaculty(a.id, e.target.value)}
+                        className={cn(
+                          "text-xs font-bold p-2 rounded-xl border outline-none",
+                          isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200"
+                        )}
+                      >
+                        <option value="">Unassigned</option>
+                        {facultyMembers.map((f: any) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs font-bold text-slate-400">
+                        {users.find((u: any) => u.id === a.facultyId)?.name || 'Unassigned'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-8 py-6">
                     <span className={cn(
@@ -3821,7 +4261,7 @@ const ActivityView = ({ isDarkMode }: any) => {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    fetch('/api/audit-logs')
+    fetch(getApiUrl('/api/audit-logs'))
       .then(res => res.json())
       .then(data => setLogs(data));
   }, []);
@@ -3913,7 +4353,7 @@ const RecommendationsView = ({ recommendations, user, isDarkMode, fetchRecommend
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/recommendations', {
+      const response = await fetch(getApiUrl('/api/recommendations'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...newRec, facultyId: user.id, facultyName: user.name })

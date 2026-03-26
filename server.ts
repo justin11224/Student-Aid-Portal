@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
@@ -7,7 +8,18 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
   app.use(express.json());
+
+  // Request Logging
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 
   // Mock Database Path
   const DB_PATH = path.join(process.cwd(), "db.json");
@@ -16,16 +28,16 @@ async function startServer() {
   if (!fs.existsSync(DB_PATH)) {
     const initialData = {
       users: [
-        { id: "2021-0001", surname: "Admin", name: "System Administrator", role: "admin", password: "password", securityQuestion: "What is your role?", securityAnswer: "admin", profilePic: "" },
-        { id: "2021-0002", surname: "Smith", name: "Dr. John Smith", role: "faculty", password: "password", securityQuestion: "What is your favorite color?", securityAnswer: "blue", profilePic: "" },
-        { id: "2021-0003", surname: "Sanchez", name: "Cidric Sanchez", role: "student", password: "password", securityQuestion: "What is your favorite color?", securityAnswer: "blue", profilePic: "", balance: 1500, grades: [
+        { id: "2021-0001", surname: "Admin", name: "System Administrator", role: "admin", status: "approved", password: "password", securityQuestion: "What is your role?", securityAnswer: "admin", profilePic: "" },
+        { id: "2021-0002", surname: "Smith", name: "Dr. John Smith", role: "faculty", status: "approved", password: "password", securityQuestion: "What is your favorite color?", securityAnswer: "blue", profilePic: "" },
+        { id: "2021-0003", surname: "Sanchez", name: "Cidric Sanchez", role: "student", status: "approved", password: "password", securityQuestion: "What is your favorite color?", securityAnswer: "blue", profilePic: "", balance: 1500, grades: [
           { subject: "Mathematics", grade: "1.25", instructor: "Dr. Smith" },
           { subject: "Physics", grade: "1.50", instructor: "Prof. Jones" }
         ], schedule: [
           { day: "Monday", time: "08:00 - 10:00", subject: "Mathematics", location: "Room 301", instructor: "Dr. Smith" },
           { day: "Wednesday", time: "10:00 - 12:00", subject: "Physics", location: "Lab 1", instructor: "Prof. Jones" }
         ] },
-        { id: "2021-0004", surname: "Garcia", name: "Maria Garcia", role: "staff", password: "password", securityQuestion: "What is your favorite color?", securityAnswer: "blue", profilePic: "" }
+        { id: "2021-0004", surname: "Garcia", name: "Maria Garcia", role: "staff", status: "approved", password: "password", securityQuestion: "What is your favorite color?", securityAnswer: "blue", profilePic: "" }
       ],
       announcements: [
         { id: 1, title: "Final Exams Schedule", content: "Final exams will start on April 15th.", date: "2026-03-15", role: "all" },
@@ -110,6 +122,12 @@ async function startServer() {
     const user = db.users.find((u: any) => u.id === schoolId && u.password === password);
     
     if (user) {
+      if (user.status === "pending") {
+        return res.status(403).json({ success: false, message: "Your account is pending approval by an administrator." });
+      }
+      if (user.status === "rejected") {
+        return res.status(403).json({ success: false, message: "Your registration has been rejected. Please contact administration." });
+      }
       logAction(user.id, "LOGIN", "User logged into the system");
       res.json({ success: true, user });
     } else {
@@ -132,6 +150,7 @@ async function startServer() {
       surname, 
       name, 
       role: role || "student", 
+      status: "pending",
       course, 
       yearLevel, 
       password,
@@ -203,6 +222,21 @@ async function startServer() {
       }
     } else {
       res.status(404).json({ success: false, message: "Request not found" });
+    }
+  });
+
+  app.post("/api/admin/approve-user", (req, res) => {
+    const { userId, status } = req.body;
+    const db = getDB();
+    const index = db.users.findIndex((u: any) => u.id === userId);
+    if (index !== -1) {
+      db.users[index].status = status;
+      saveDB(db);
+      logAction("ADMIN", "USER_APPROVAL", `User ${userId} status updated to ${status}`);
+      createNotification(userId, "Account Update", `Your account registration has been ${status}`, status === 'approved' ? 'success' : 'error');
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, message: "User not found" });
     }
   });
 
@@ -357,6 +391,21 @@ async function startServer() {
       saveDB(db);
       logAction("ADMIN", "FINANCIAL_AID_UPDATE", `Application ${req.params.id} status updated to ${status}`);
       createNotification(studentId, "Application Update", `Your application for ${db.financialAid[index].program} has been ${status}`, status === 'approved' ? 'success' : 'error');
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, message: "Application not found" });
+    }
+  });
+
+  app.put("/api/financial-aid/:id/assign", (req, res) => {
+    const { facultyId } = req.body;
+    const db = getDB();
+    const index = db.financialAid.findIndex((f: any) => f.id === parseInt(req.params.id));
+    if (index !== -1) {
+      db.financialAid[index].facultyId = facultyId;
+      saveDB(db);
+      logAction("ADMIN", "FINANCIAL_AID_ASSIGN", `Application ${req.params.id} assigned to faculty ${facultyId}`);
+      createNotification(facultyId, "New Assignment", `You have been assigned to review an application.`, "info");
       res.json({ success: true });
     } else {
       res.status(404).json({ success: false, message: "Application not found" });
