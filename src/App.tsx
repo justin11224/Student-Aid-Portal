@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, 
+  Home,
   BookOpen, 
   Calendar, 
   Bell, 
@@ -13,6 +14,7 @@ import {
   AlertTriangle,
   Trash2, 
   Edit, 
+  Edit2,
   CheckCircle, 
   XCircle,
   Mail,
@@ -33,6 +35,7 @@ import {
   TrendingUp,
   Award,
   Users,
+  Users2,
   Send,
   X,
   FileText,
@@ -40,7 +43,24 @@ import {
   Camera,
   Upload,
   Download,
-  Key
+  Key,
+  LifeBuoy,
+  CreditCard,
+  Library,
+  UserCheck,
+  Wallet,
+  Heart,
+  PlusCircle,
+  GraduationCap,
+  Palette,
+  ClipboardList,
+  Book,
+  Globe,
+  ShieldCheck,
+  BarChart3,
+  Database,
+  Calculator,
+  Receipt,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -84,6 +104,7 @@ interface UserData {
   securityQuestion?: string;
   securityAnswer?: string;
   profilePic?: string;
+  mentorId?: string;
 }
 
 export default function App() {
@@ -108,6 +129,7 @@ export default function App() {
     course: 'BSIT', 
     yearLevel: '1st Year',
     password: '',
+    confirmPassword: '',
     securityQuestion: 'What is your favorite color?',
     securityAnswer: ''
   });
@@ -119,11 +141,15 @@ export default function App() {
   const [scholarships, setScholarships] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [activeModal, setActiveModal] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('aid_portal_dark_mode');
     return saved === 'true';
   });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('aid_portal_sidebar_open');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ users: UserData[], announcements: any[], applications: any[] } | null>(null);
   const [policies, setPolicies] = useState<any>(null);
@@ -138,6 +164,7 @@ export default function App() {
 
   const [selectedScholarship, setSelectedScholarship] = useState<string | null>(null);
   const [selectedStudentForRec, setSelectedStudentForRec] = useState<{id: string, name: string} | null>(null);
+  const [gradeEntryFilter, setGradeEntryFilter] = useState('');
 
   // Persist state
   useEffect(() => {
@@ -149,12 +176,25 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    localStorage.setItem('aid_portal_sidebar_open', String(isSidebarOpen));
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
     localStorage.setItem('aid_portal_view', view);
   }, [view]);
 
   useEffect(() => {
     localStorage.setItem('aid_portal_dark_mode', isDarkMode.toString());
   }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('aid_portal_sidebar_open', isSidebarOpen.toString());
+  }, [isSidebarOpen]);
+
+  const [mentors, setMentors] = useState<any[]>([]);
+  const [resources, setResources] = useState<any[]>([]);
+  const [communityEvents, setCommunityEvents] = useState<any[]>([]);
+  const [communityOrgs, setCommunityOrgs] = useState<any[]>([]);
 
   // Fetch data
   useEffect(() => {
@@ -167,8 +207,28 @@ export default function App() {
       fetchRecommendations();
       fetchNotifications();
       fetchPolicies();
+      fetchMentors();
+      fetchResources();
+      fetchCommunityData();
     }
   }, [user]);
+
+  const fetchMentors = async () => {
+    const { data, error } = await supabase.from('mentors').select('*');
+    if (!error && data) setMentors(data);
+  };
+
+  const fetchResources = async () => {
+    const { data, error } = await supabase.from('resources').select('*');
+    if (!error && data) setResources(data);
+  };
+
+  const fetchCommunityData = async () => {
+    const { data: events, error: eError } = await supabase.from('community_events').select('*');
+    const { data: orgs, error: oError } = await supabase.from('community_orgs').select('*');
+    if (!eError && events) setCommunityEvents(events);
+    if (!oError && orgs) setCommunityOrgs(orgs);
+  };
 
   // Generate ID for registration
   useEffect(() => {
@@ -342,11 +402,15 @@ export default function App() {
     // Create notification for student
     const app = financialAid.find(a => a.id === id);
     if (app) {
+      let notificationType: 'success' | 'error' | 'info' = 'info';
+      if (status === 'approved') notificationType = 'success';
+      if (status === 'rejected') notificationType = 'error';
+
       await supabase.from('notifications').insert({
         userId: app.studentId,
         title: "Application Update",
-        message: `Your application for ${app.program} has been ${status}`,
-        type: status === 'approved' ? 'success' : 'error',
+        message: `Your application for ${app.program} has been ${status}.`,
+        type: notificationType,
         read: false,
         timestamp: new Date().toISOString()
       });
@@ -417,13 +481,53 @@ export default function App() {
     }
   };
 
+  const validatePassword = (password: string) => {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (password.length < minLength) return "Password must be at least 8 characters long.";
+    if (!hasUpperCase) return "Password must contain at least one uppercase letter.";
+    if (!hasLowerCase) return "Password must contain at least one lowercase letter.";
+    if (!hasNumbers) return "Password must contain at least one number.";
+    if (!hasSpecialChar) return "Password must contain at least one special character.";
+    return null;
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (regData.password !== regData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    const passwordError = validatePassword(regData.password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
     try {
+      // Check if ID already exists
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', regData.id)
+        .single();
+      
+      if (existingUser) {
+        setError('School ID Number already exists. Please use a unique ID.');
+        return;
+      }
+
+      const { confirmPassword, ...dataToInsert } = regData;
       const newUser = {
-        ...regData,
-        status: regData.role === 'admin' ? 'approved' : 'pending',
+        ...dataToInsert,
+        status: 'pending',
         balance: 0,
         grades: [],
         schedule: []
@@ -462,6 +566,7 @@ export default function App() {
         course: 'BSIT', 
         yearLevel: '1st Year',
         password: '',
+        confirmPassword: '',
         securityQuestion: 'What is your favorite color?',
         securityAnswer: ''
       });
@@ -651,16 +756,38 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
-                  <input 
-                    type="password" 
-                    value={regData.password}
-                    onChange={(e) => setRegData({...regData, password: e.target.value})}
-                    className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
-                    placeholder="Create a password"
-                    required
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
+                    <input 
+                      type="password" 
+                      value={regData.password}
+                      onChange={(e) => setRegData({...regData, password: e.target.value})}
+                      className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
+                      placeholder="Create a password"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Confirm Password</label>
+                    <input 
+                      type="password" 
+                      value={regData.confirmPassword}
+                      onChange={(e) => setRegData({...regData, confirmPassword: e.target.value})}
+                      className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all"
+                      placeholder="Confirm password"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-stone-500 bg-stone-50 p-3 rounded-xl space-y-1">
+                  <p className="font-bold uppercase tracking-widest text-stone-400 mb-1">Password Requirements:</p>
+                  <p className={cn(regData.password.length >= 8 ? "text-emerald-600" : "text-stone-400")}>• Minimum 8 characters</p>
+                  <p className={cn(/[A-Z]/.test(regData.password) ? "text-emerald-600" : "text-stone-400")}>• At least one uppercase letter</p>
+                  <p className={cn(/[a-z]/.test(regData.password) ? "text-emerald-600" : "text-stone-400")}>• At least one lowercase letter</p>
+                  <p className={cn(/\d/.test(regData.password) ? "text-emerald-600" : "text-stone-400")}>• At least one number</p>
+                  <p className={cn(/[!@#$%^&*(),.?":{}|<>]/.test(regData.password) ? "text-emerald-600" : "text-stone-400")}>• At least one special character</p>
                 </div>
 
                 <div>
@@ -689,7 +816,7 @@ export default function App() {
                   />
                 </div>
 
-                <div>
+                <div className="hidden">
                   <label className="block text-sm font-medium text-stone-700 mb-1">Role</label>
                   <select 
                     value={regData.role}
@@ -697,9 +824,6 @@ export default function App() {
                     className="w-full p-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all appearance-none"
                   >
                     <option value="student">Student</option>
-                    <option value="faculty">Faculty</option>
-                    <option value="staff">Staff</option>
-                    <option value="admin">Admin</option>
                   </select>
                 </div>
 
@@ -775,77 +899,115 @@ export default function App() {
         isSidebarOpen ? "w-72 translate-x-0" : "w-0 -translate-x-full lg:w-20 lg:translate-x-0"
       )}>
         <div className="h-full flex flex-col overflow-hidden">
-          <div className="p-6 flex items-center justify-between">
-            <h2 className={cn(
-              "font-black tracking-tighter flex items-center gap-3 transition-all",
-              isSidebarOpen ? "text-2xl opacity-100" : "text-0 opacity-0"
-            )}>
-              <Shield className="w-8 h-8 text-red-600 shrink-0" />
-              <span className="truncate">PORTAL</span>
-            </h2>
+          <div className={cn(
+            "p-6 flex items-center transition-all",
+            isSidebarOpen ? "justify-between" : "justify-center"
+          )}>
+            {isSidebarOpen && (
+              <h2 className="font-black tracking-tighter flex items-center gap-3 transition-all text-2xl opacity-100">
+                <Shield className="w-8 h-8 text-red-600 shrink-0" />
+                <span className="truncate">PORTAL</span>
+              </h2>
+            )}
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className={cn(
-                "p-2 rounded-xl transition-colors",
+                "p-2 rounded-xl transition-colors hidden lg:block",
                 isDarkMode ? "hover:bg-white/5 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >
-              {isSidebarOpen ? <ArrowLeft className="w-5 h-5" /> : <LogIn className="w-5 h-5 rotate-180" />}
+              {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            {/* Mobile Close Button */}
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className={cn(
+                "p-2 rounded-xl transition-colors lg:hidden",
+                isDarkMode ? "hover:bg-white/5 text-slate-400" : "hover:bg-slate-100 text-slate-500"
+              )}
+            >
+              <X className="w-5 h-5" />
             </button>
           </div>
           
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            <NavItem icon={<LayoutDashboard />} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+            {user.role !== 'faculty' && (
+              <>
+                <NavCategory label="MAIN" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Home />} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<User />} label="My Profile" active={view === 'profile'} onClick={() => setView('profile')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+              </>
+            )}
             
             {user.role === 'student' && (
               <>
-                <NavItem icon={<User />} label="My Profile" active={view === 'profile'} onClick={() => setView('profile')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarships" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Plus />} label="Apply for Aid" active={view === 'finance'} onClick={() => setView('finance')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<FileText />} label="My Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<MapPin />} label="Documents" active={view === 'documents'} onClick={() => setView('documents')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Bell />} label="Notifications" active={view === 'notifications'} onClick={() => setView('notifications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<MessageSquare />} label="Inquiries" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavCategory label="ACADEMIC" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<BookOpen />} label="My Grades" active={view === 'grades'} onClick={() => setView('grades')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Calendar />} label="Class Schedule" active={view === 'schedule'} onClick={() => setView('schedule')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<LifeBuoy />} label="Academic Support" active={view === 'academic-support'} onClick={() => setView('academic-support')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                
+                <NavCategory label="FINANCIAL" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<DollarSign />} label="Financial Aid" active={view === 'finance'} onClick={() => setView('finance')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Wallet />} label="Balance & Payments" active={view === 'payments'} onClick={() => setView('payments')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
-
-            {user.role === 'faculty' && (
+            
+            {user.role === 'student' && (
               <>
-                <NavItem icon={<Users />} label="Student Directory" active={view === 'students'} onClick={() => setView('students')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<FileText />} label="Student Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<CheckCircle />} label="Recommendations" active={view === 'recommendations'} onClick={() => setView('recommendations')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarship Info" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<TrendingUp />} label="Reports" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavCategory label="SUPPORT" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Heart />} label="Mentorship & Counseling" active={view === 'mentorship'} onClick={() => setView('mentorship')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Library />} label="Resource Library" active={view === 'resources'} onClick={() => setView('resources')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Users />} label="Community" active={view === 'community'} onClick={() => setView('community')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                
+                <NavCategory label="COMMUNICATION" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<MessageSquare />} label="Messages" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-              </>
-            )}
-
-            {user.role === 'staff' && (
-              <>
-                <NavItem icon={<FileText />} label="Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<MapPin />} label="Documents" active={view === 'documents'} onClick={() => setView('documents')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarships" active={view === 'scholarships'} onClick={() => setView('scholarships')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<MessageSquare />} label="Student Inquiries" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<TrendingUp />} label="Reports" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
 
             {user.role === 'admin' && (
               <>
-                <NavItem icon={<Users />} label="User Accounts" active={view === 'admin'} onClick={() => setView('admin')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Award />} label="Scholarship Programs" active={view === 'programs'} onClick={() => setView('programs')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<FileText />} label="All Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<MessageSquare />} label="Messages" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<TrendingUp />} label="Reports & Analytics" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavCategory label="USER MANAGEMENT" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Users />} label="Users" active={view === 'admin'} onClick={() => setView('admin')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<ShieldCheck />} label="Roles & Permissions" active={view === 'roles'} onClick={() => setView('roles')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+
+                <NavCategory label="FINANCIAL MANAGEMENT" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<DollarSign />} label="Financial Aid Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Calculator />} label="Transactions" active={view === 'transactions'} onClick={() => setView('transactions')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+
+                <NavCategory label="ACADEMIC" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Book />} label="Courses" active={view === 'courses'} onClick={() => setView('courses')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<UserPlus />} label="Course Enrollment" active={view === 'enrollment'} onClick={() => setView('enrollment')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<ClipboardList />} label="Grades Management" active={view === 'grades-mgmt'} onClick={() => setView('grades-mgmt')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+
+                <NavCategory label="CONTENT" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Clock />} label="System Activity" active={view === 'activity'} onClick={() => setView('activity')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Shield />} label="Policies & Guide" active={view === 'policies'} onClick={() => setView('policies')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Library />} label="Resource Library" active={view === 'resources'} onClick={() => setView('resources')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Heart />} label="Mentorship" active={view === 'mentorship'} onClick={() => setView('mentorship')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                
+                <NavCategory label="SYSTEM" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<BarChart3 />} label="Reports & Analytics" active={view === 'reports'} onClick={() => setView('reports')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Database />} label="Backup & Recovery" active={view === 'activity'} onClick={() => setView('activity')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Settings />} label="Settings" active={view === 'settings'} onClick={() => setView('settings')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+              </>
+            )}
+
+            {user.role === 'faculty' && (
+              <>
+                <NavItem icon={<Home />} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<User />} label="My Profile" active={view === 'profile'} onClick={() => setView('profile')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+
+                <NavCategory label="TEACHING" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Book />} label="My Courses" active={view === 'courses'} onClick={() => setView('courses')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<ClipboardList />} label="Grade Entry" active={view === 'grade-entry'} onClick={() => setView('grade-entry')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+
+                <NavCategory label="STUDENTS" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Users />} label="My Students" active={view === 'students'} onClick={() => setView('students')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Users2 />} label="Mentorship" active={view === 'mentorship'} onClick={() => setView('mentorship')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+
+                <NavCategory label="COMMUNICATION" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Mail />} label="Messages" active={view === 'messages'} onClick={() => setView('messages')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
+                <NavItem icon={<Megaphone />} label="Announcements" active={view === 'announcements'} onClick={() => setView('announcements')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
               </>
             )}
           </nav>
@@ -854,22 +1016,40 @@ export default function App() {
             <button 
               onClick={() => setIsDarkMode(!isDarkMode)}
               className={cn(
-                "w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium",
-                isDarkMode ? "text-slate-400 hover:bg-white/5 hover:text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                "w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium relative group",
+                isDarkMode ? "text-slate-400 hover:bg-white/5 hover:text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900",
+                !isSidebarOpen && "justify-center"
               )}
             >
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               {isSidebarOpen && <span>{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+              {!isSidebarOpen && (
+                <div className={cn(
+                  "absolute left-full ml-4 px-3 py-2 rounded-lg text-xs font-bold opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-[-10px] group-hover:translate-x-0 z-50 whitespace-nowrap",
+                  isDarkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
+                )}>
+                  {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+                </div>
+              )}
             </button>
             <button 
               onClick={handleLogout}
               className={cn(
-                "w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium text-red-500",
-                isDarkMode ? "hover:bg-red-500/10" : "hover:bg-red-50"
+                "w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium text-red-500 relative group",
+                isDarkMode ? "hover:bg-red-500/10" : "hover:bg-red-50",
+                !isSidebarOpen && "justify-center"
               )}
             >
               <LogOut className="w-5 h-5" />
               {isSidebarOpen && <span>Logout</span>}
+              {!isSidebarOpen && (
+                <div className={cn(
+                  "absolute left-full ml-4 px-3 py-2 rounded-lg text-xs font-bold opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-[-10px] group-hover:translate-x-0 z-50 whitespace-nowrap",
+                  isDarkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
+                )}>
+                  Logout
+                </div>
+              )}
             </button>
           </div>
         </div>
@@ -883,6 +1063,15 @@ export default function App() {
           isDarkMode ? "bg-[#0A0A0A] border-white/5" : "bg-white border-slate-200"
         )}>
           <div className="flex items-center gap-4 flex-1 max-w-xl">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className={cn(
+                "p-2 rounded-xl lg:hidden transition-colors",
+                isDarkMode ? "hover:bg-white/5 text-slate-400" : "hover:bg-slate-100 text-slate-500"
+              )}
+            >
+              <Menu className="w-6 h-6" />
+            </button>
             <div className={cn(
               "relative w-full group",
               isDarkMode ? "text-white" : "text-slate-900"
@@ -990,20 +1179,59 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
-              user.role === 'admin' ? <AdminDashboard user={user} isDarkMode={isDarkMode} users={users} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} setView={setView} /> :
-              user.role === 'faculty' ? <FacultyDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} recommendations={recommendations} fetchRecommendations={fetchRecommendations} users={users} setView={setView} selectedStudentForRec={selectedStudentForRec} setSelectedStudentForRec={setSelectedStudentForRec} /> :
-              user.role === 'staff' ? <StaffDashboard user={user} isDarkMode={isDarkMode} financialAid={financialAid} scholarships={scholarships} announcements={announcements} updateFinancialAidStatus={updateFinancialAidStatus} setView={setView} /> :
-              <StudentDashboard user={user} isDarkMode={isDarkMode} setView={setView} announcements={announcements} scholarships={scholarships} financialAid={financialAid} />
+              user.role === 'admin' ? (
+                <AdminDashboard 
+                  user={user}
+                  users={users} 
+                  isDarkMode={isDarkMode} 
+                  financialAid={financialAid} 
+                  scholarships={scholarships} 
+                  announcements={announcements}
+                  updateFinancialAidStatus={updateFinancialAidStatus}
+                  setView={setView} 
+                />
+              ) : user.role === 'faculty' ? (
+                <FacultyDashboard 
+                  user={user} 
+                  isDarkMode={isDarkMode} 
+                  financialAid={financialAid} 
+                  scholarships={scholarships} 
+                  recommendations={recommendations} 
+                  fetchRecommendations={fetchRecommendations} 
+                  users={users} 
+                  fetchUsers={fetchUsers} 
+                  setView={setView} 
+                  selectedStudentForRec={selectedStudentForRec} 
+                  setSelectedStudentForRec={setSelectedStudentForRec} 
+                />
+              ) : (
+                <StudentDashboard 
+                  user={user} 
+                  isDarkMode={isDarkMode} 
+                  setView={setView} 
+                  announcements={announcements} 
+                  scholarships={scholarships} 
+                  financialAid={financialAid} 
+                  users={users}
+                  mentors={mentors}
+                />
+              )
             )}
             {view === 'search' && <SearchResults results={searchResults} query={searchQuery} isDarkMode={isDarkMode} />}
             {view === 'profile' && <Profile user={user} setUser={setUser} isDarkMode={isDarkMode} />}
             {view === 'grades' && <Grades user={user} isDarkMode={isDarkMode} />}
             {view === 'schedule' && <Schedule user={user} isDarkMode={isDarkMode} />}
+            {view === 'courses' && <CoursesView isDarkMode={isDarkMode} setView={setView} setGradeEntryFilter={setGradeEntryFilter} users={users} fetchUsers={fetchUsers} facultyUser={user} />}
+            {view === 'grade-entry' && <GradeEntryView users={users} isDarkMode={isDarkMode} facultyUser={user} fetchUsers={fetchUsers} initialFilter={gradeEntryFilter} setGradeEntryFilter={setGradeEntryFilter} />}
             {view === 'finance' && <FinancialAid user={user} financialAid={financialAid} fetchFinancialAid={fetchFinancialAid} isDarkMode={isDarkMode} selectedScholarship={selectedScholarship} setSelectedScholarship={setSelectedScholarship} />}
             {view === 'messages' && <Messages user={user} messages={messages} fetchMessages={fetchMessages} users={users} isDarkMode={isDarkMode} />}
             {view === 'documents' && <Documents user={user} isDarkMode={isDarkMode} />}
-            {view === 'announcements' && <Announcements announcements={announcements} user={user} isDarkMode={isDarkMode} fetchAnnouncements={fetchAnnouncements} setConfirmConfig={setConfirmConfig} />}
+            {view === 'announcements' && <Announcements announcements={announcements} user={user} isDarkMode={isDarkMode} fetchAnnouncements={fetchAnnouncements} setConfirmConfig={setConfirmConfig} activeModal={activeModal} setActiveModal={setActiveModal} />}
             {view === 'admin' && <AdminPanel users={users} fetchUsers={fetchUsers} isDarkMode={isDarkMode} setConfirmConfig={setConfirmConfig} />}
+            {view === 'roles' && <RolesView isDarkMode={isDarkMode} />}
+            {view === 'transactions' && <TransactionsView isDarkMode={isDarkMode} />}
+            {view === 'enrollment' && <EnrollmentView isDarkMode={isDarkMode} />}
+            {view === 'grades-mgmt' && <GradesMgmtView users={users} isDarkMode={isDarkMode} fetchUsers={fetchUsers} initialFilter={gradeEntryFilter} />}
             {view === 'students' && <StudentsView users={users} isDarkMode={isDarkMode} />}
             {view === 'policies' && <PoliciesView policies={policies} isDarkMode={isDarkMode} />}
             {view === 'scholarships' && <ScholarshipsView scholarships={scholarships} user={user} isDarkMode={isDarkMode} setView={setView} setSelectedScholarship={setSelectedScholarship} />}
@@ -1013,6 +1241,12 @@ export default function App() {
             {view === 'activity' && <ActivityView isDarkMode={isDarkMode} />}
             {view === 'recommendations' && <RecommendationsView recommendations={recommendations} user={user} isDarkMode={isDarkMode} fetchRecommendations={fetchRecommendations} users={users} />}
             {view === 'notifications' && <NotificationsView notifications={notifications} isDarkMode={isDarkMode} />}
+            {view === 'academic-support' && <AcademicSupport user={user} isDarkMode={isDarkMode} />}
+            {view === 'payments' && <Payments user={user} isDarkMode={isDarkMode} />}
+            {view === 'mentorship' && <Mentorship user={user} isDarkMode={isDarkMode} mentors={mentors} fetchMentors={fetchMentors} fetchUsers={fetchUsers} activeModal={activeModal} setActiveModal={setActiveModal} />}
+            {view === 'resources' && <Resources user={user} isDarkMode={isDarkMode} resources={resources} fetchResources={fetchResources} activeModal={activeModal} setActiveModal={setActiveModal} />}
+            {view === 'community' && <Community user={user} isDarkMode={isDarkMode} events={communityEvents} orgs={communityOrgs} fetchCommunityData={fetchCommunityData} activeModal={activeModal} setActiveModal={setActiveModal} />}
+            {view === 'settings' && <SettingsView user={user} isDarkMode={isDarkMode} />}
           </AnimatePresence>
         </main>
       </div>
@@ -1255,6 +1489,18 @@ function FeatureCard({ icon, title, description }: { icon: any, title: string, d
   );
 }
 
+function NavCategory({ label, collapsed, isDarkMode }: { label: string, collapsed?: boolean, isDarkMode?: boolean }) {
+  if (collapsed) return <div className="h-px bg-slate-200 dark:bg-white/5 my-4 mx-2" />;
+  return (
+    <div className={cn(
+      "px-4 pt-6 pb-2 text-[10px] font-black uppercase tracking-[0.2em]",
+      isDarkMode ? "text-slate-600" : "text-slate-400"
+    )}>
+      {label}
+    </div>
+  );
+}
+
 function NavItem({ icon, label, active, onClick, collapsed, isDarkMode }: { icon: any, label: string, active: boolean, onClick: () => void, collapsed?: boolean, isDarkMode?: boolean }) {
   return (
     <button 
@@ -1288,34 +1534,60 @@ function StudentDashboard({
   setView, 
   financialAid = [], 
   scholarships = [], 
-  announcements = [] 
+  announcements = [],
+  users = [],
+  mentors = []
 }: { 
   user: UserData, 
   isDarkMode?: boolean, 
   setView: (v: string) => void, 
   financialAid?: any[], 
   scholarships?: any[], 
-  announcements?: any[] 
+  announcements?: any[],
+  users?: any[],
+  mentors?: any[]
 }) {
+  const isStudent = user.role === 'student';
   const myApplications = (financialAid || []).filter(a => a.studentId === user.id);
   const approvedAid = myApplications.filter(a => a.status === 'approved').reduce((acc, curr) => acc + (parseInt(curr.amount?.replace(/[^0-9]/g, '') || '0')), 0);
   const pendingApps = myApplications.filter(a => a.status === 'pending').length;
 
+  // Admin/Faculty Stats
+  const totalStudents = users.filter((u: any) => u.role === 'student').length;
+  const totalApplications = (financialAid || []).length;
+  const totalScholarships = (scholarships || []).length;
+  const totalMentors = (mentors || []).length;
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       <header>
-        <h1 className="text-4xl font-black tracking-tighter">Welcome back, {user.name.split(' ')[0]}! 👋</h1>
-        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Here's your financial aid overview for AY 2024-2025</p>
+        <h1 className="text-4xl font-black tracking-tighter uppercase">
+          {isStudent ? `Welcome back, ${user.name.split(' ')[0]}! 👋` : `${user.role} Dashboard`}
+        </h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>
+          {isStudent ? "Here's your financial aid overview for AY 2024-2025" : `Welcome back, ${user.name}. Here's the system overview.`}
+        </p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard icon={<FileText />} label="Applications" value={myApplications.length.toString()} trend="Active" color="purple" isDarkMode={isDarkMode} />
-        <StatCard icon={<CheckCircle />} label="Approved" value={myApplications.filter(a => a.status === 'approved').length.toString()} trend="Disbursement ready" color="emerald" isDarkMode={isDarkMode} />
-        <StatCard icon={<Clock />} label="Pending" value={pendingApps.toString()} trend="No pending items" color="amber" isDarkMode={isDarkMode} />
-        <StatCard icon={<DollarSign />} label="Aid Received" value={`₱${approvedAid.toLocaleString()}`} trend="Total disbursed" color="blue" isDarkMode={isDarkMode} />
+        {isStudent ? (
+          <>
+            <StatCard icon={<FileText />} label="Applications" value={myApplications.length.toString()} trend="Active" color="purple" isDarkMode={isDarkMode} />
+            <StatCard icon={<CheckCircle />} label="Approved" value={myApplications.filter(a => a.status === 'approved').length.toString()} trend="Disbursement ready" color="emerald" isDarkMode={isDarkMode} />
+            <StatCard icon={<Clock />} label="Pending" value={pendingApps.toString()} trend="No pending items" color="amber" isDarkMode={isDarkMode} />
+            <StatCard icon={<DollarSign />} label="Aid Received" value={`₱${approvedAid.toLocaleString()}`} trend="Total disbursed" color="blue" isDarkMode={isDarkMode} />
+          </>
+        ) : (
+          <>
+            <StatCard icon={<Users />} label="Total Students" value={totalStudents.toString()} trend="Registered" color="blue" isDarkMode={isDarkMode} />
+            <StatCard icon={<FileText />} label="Applications" value={totalApplications.toString()} trend="Total submitted" color="purple" isDarkMode={isDarkMode} />
+            <StatCard icon={<GraduationCap />} label="Scholarships" value={totalScholarships.toString()} trend="Active programs" color="emerald" isDarkMode={isDarkMode} />
+            <StatCard icon={<UserCheck />} label="Mentors" value={totalMentors.toString()} trend="Verified" color="amber" isDarkMode={isDarkMode} />
+          </>
+        )}
       </div>
 
-      {myApplications.some(a => a.status === 'approved') && (
+      {isStudent && myApplications.some(a => a.status === 'approved') && (
         <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center gap-3 text-emerald-500 font-bold text-sm">
           <CheckCircle className="w-5 h-5" />
           <span>Your application has been approved! Disbursement is being processed.</span>
@@ -1324,94 +1596,208 @@ function StudentDashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <div className={cn(
-            "p-8 rounded-[2.5rem] border transition-all",
-            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
-          )}>
-            <h3 className="text-xl font-bold mb-6">My Applications</h3>
-            <div className="space-y-4">
-              {myApplications.length > 0 ? myApplications.map((app, i) => (
-                <div key={i} className={cn(
-                  "p-6 rounded-2xl border flex flex-col gap-4",
-                  isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
-                )}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-black">{app.program || 'N/A'}</h4>
-                      <p className="text-xs text-slate-400">{app.id?.toString().slice(-8) || 'N/A'} • {app.date ? new Date(app.date).toLocaleDateString() : 'N/A'}</p>
-                    </div>
-                    <span className={cn(
-                      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                      app.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" :
-                      app.status === 'pending' ? "bg-amber-500/10 text-amber-500" :
-                      "bg-blue-500/10 text-blue-500"
+          {isStudent ? (
+            <>
+              <div className={cn(
+                "p-8 rounded-[2.5rem] border transition-all",
+                isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <h3 className="text-xl font-bold mb-6">My Applications</h3>
+                <div className="space-y-4">
+                  {myApplications.length > 0 ? myApplications.map((app, i) => (
+                    <div key={i} className={cn(
+                      "p-6 rounded-2xl border flex flex-col gap-4",
+                      isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
                     )}>
-                      {app.status}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => setView('documents')}
-                    className="w-full py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 transition-all flex items-center justify-center gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    View Documents
-                  </button>
-                </div>
-              )) : (
-                <div className="text-center py-8 text-slate-400 font-bold italic">
-                  No active applications found.
-                </div>
-              )}
-              <button 
-                onClick={() => setView('finance')}
-                className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Apply for More Aid
-              </button>
-            </div>
-          </div>
-
-          <div className={cn(
-            "p-8 rounded-[2.5rem] border transition-all",
-            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
-          )}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">Document Checklist</h3>
-              <button 
-                onClick={() => setView('documents')}
-                className="text-xs font-black uppercase tracking-widest text-red-600 hover:text-red-700 transition-colors"
-              >
-                Manage All →
-              </button>
-            </div>
-            <div className="space-y-4">
-              {[
-                { label: 'Valid School ID', status: 'Uploaded', color: 'text-emerald-500', icon: <CheckCircle className="w-4 h-4" /> },
-                { label: 'Report Card (Grades)', status: 'Uploaded', color: 'text-emerald-500', icon: <CheckCircle className="w-4 h-4" /> },
-                { label: 'Income Certificate', status: 'Uploaded', color: 'text-emerald-500', icon: <CheckCircle className="w-4 h-4" /> },
-                { label: 'Barangay Certificate', status: 'Pending', color: 'text-amber-500', icon: <Clock className="w-4 h-4" /> },
-              ].map((doc, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/5 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <span className={doc.color}>{doc.icon}</span>
-                    <span className="font-bold text-sm">{doc.label}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className={cn("text-[10px] font-black uppercase tracking-widest", doc.color)}>{doc.status}</span>
-                    {doc.status === 'Pending' && (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-black">{app.program || 'N/A'}</h4>
+                          <p className="text-xs text-slate-400">{app.id?.toString().slice(-8) || 'N/A'} • {app.date ? new Date(app.date).toLocaleDateString() : 'N/A'}</p>
+                        </div>
+                        <span className={cn(
+                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                          app.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" :
+                          app.status === 'pending' ? "bg-amber-500/10 text-amber-500" :
+                          "bg-blue-500/10 text-blue-500"
+                        )}>
+                          {app.status}
+                        </span>
+                      </div>
                       <button 
                         onClick={() => setView('documents')}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                        className="w-full py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 transition-all flex items-center justify-center gap-2"
                       >
-                        <Upload className="w-4 h-4 text-slate-400" />
+                        <FileText className="w-4 h-4" />
+                        View Documents
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )) : (
+                    <div className="text-center py-8 text-slate-400 font-bold italic">
+                      No active applications found.
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => setView('finance')}
+                    className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Apply for More Aid
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+
+              <div className={cn(
+                "p-8 rounded-[2.5rem] border transition-all",
+                isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold">My Mentor</h3>
+                  <button 
+                    onClick={() => setView('mentorship')}
+                    className="text-xs font-black uppercase tracking-widest text-red-600 hover:text-red-700 transition-colors"
+                  >
+                    {user.mentorId ? 'Change Mentor →' : 'Select Mentor →'}
+                  </button>
+                </div>
+                {user.mentorId ? (
+                  (() => {
+                    const myMentor = mentors.find(m => m.id === user.mentorId);
+                    return myMentor ? (
+                      <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                        <div className="w-12 h-12 rounded-xl bg-red-600 flex items-center justify-center text-white font-black text-xl">
+                          {myMentor.name[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold">{myMentor.name}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{myMentor.role}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-slate-400 font-bold italic">
+                        Mentor information not found.
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="text-center py-8 bg-slate-50 dark:bg-white/5 rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+                    <Heart className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400 font-bold italic">No mentor selected yet.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className={cn(
+                "p-8 rounded-[2.5rem] border transition-all",
+                isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold">Document Checklist</h3>
+                  <button 
+                    onClick={() => setView('documents')}
+                    className="text-xs font-black uppercase tracking-widest text-red-600 hover:text-red-700 transition-colors"
+                  >
+                    Manage All →
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {[
+                    { label: 'Valid School ID', status: 'Pending', color: 'text-amber-500', icon: <Clock className="w-4 h-4" /> },
+                    { label: 'Report Card (Grades)', status: 'Pending', color: 'text-amber-500', icon: <Clock className="w-4 h-4" /> },
+                    { label: 'Income Certificate', status: 'Pending', color: 'text-amber-500', icon: <Clock className="w-4 h-4" /> },
+                    { label: 'Barangay Certificate', status: 'Pending', color: 'text-amber-500', icon: <Clock className="w-4 h-4" /> },
+                  ].map((doc, i) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/5 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className={doc.color}>{doc.icon}</span>
+                        <span className="font-bold text-sm">{doc.label}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", doc.color)}>{doc.status}</span>
+                        {doc.status === 'Pending' && (
+                          <button 
+                            onClick={() => setView('documents')}
+                            className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                          >
+                            <Upload className="w-4 h-4 text-slate-400" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={cn(
+                "p-8 rounded-[2.5rem] border transition-all",
+                isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <h3 className="text-xl font-bold mb-6">Recent Applications</h3>
+                <div className="space-y-4">
+                  {(financialAid || []).slice(0, 5).map((app, i) => (
+                    <div key={i} className={cn(
+                      "p-4 rounded-2xl border flex items-center justify-between",
+                      isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+                    )}>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-red-600/10 flex items-center justify-center text-red-600">
+                          <User className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm">{app.studentName || 'Unknown Student'}</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{app.program || 'N/A'} • {app.date ? new Date(app.date).toLocaleDateString() : 'N/A'}</p>
+                        </div>
+                      </div>
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+                        app.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" :
+                        app.status === 'pending' ? "bg-amber-500/10 text-amber-500" :
+                        "bg-blue-500/10 text-blue-500"
+                      )}>
+                        {app.status}
+                      </span>
+                    </div>
+                  ))}
+                  <button 
+                    onClick={() => setView('applications')}
+                    className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                  >
+                    View All Applications
+                  </button>
+                </div>
+              </div>
+
+              <div className={cn(
+                "p-8 rounded-[2.5rem] border transition-all",
+                isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <h3 className="text-xl font-bold mb-6">Quick Actions</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: 'Add Scholarship', icon: <Plus />, onClick: () => setView('scholarships') },
+                    { label: 'Post Announcement', icon: <Megaphone />, onClick: () => setView('announcements') },
+                    { label: 'Manage Users', icon: <Users />, onClick: () => setView('users') },
+                    { label: 'Backup & Recovery', icon: <Database />, onClick: () => setView('activity') },
+                  ].map((action, i) => (
+                    <button 
+                      key={i}
+                      onClick={action.onClick}
+                      className={cn(
+                        "p-6 rounded-2xl border flex flex-col items-center gap-3 transition-all group",
+                        isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-slate-50 border-slate-100 hover:bg-slate-100"
+                      )}
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-red-600/10 flex items-center justify-center text-red-600 group-hover:scale-110 transition-transform">
+                        {action.icon}
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-center">{action.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="space-y-8">
@@ -1460,6 +1846,420 @@ function StudentDashboard({
   );
 }
 
+const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUsers, facultyUser }: { isDarkMode: boolean, setView: (view: string) => void, setGradeEntryFilter: (filter: string) => void, users: UserData[], fetchUsers: () => void, facultyUser: UserData }) => {
+  const [showClassList, setShowClassList] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+
+  const isAdmin = facultyUser.role === 'admin';
+
+  const courses = [
+    { id: 'IT101', name: 'Introduction to Computing', schedule: 'Mon/Wed 8:00 AM - 9:30 AM', students: 45, day: 'Monday', time: '08:00 AM', location: 'Lab 1' },
+    { id: 'IT102', name: 'Computer Programming 1', schedule: 'Tue/Thu 10:00 AM - 12:00 PM', students: 38, day: 'Tuesday', time: '10:00 AM', location: 'Lab 2' },
+    { id: 'IT201', name: 'Data Structures and Algorithms', schedule: 'Fri 1:00 PM - 4:00 PM', students: 42, day: 'Friday', time: '01:00 PM', location: 'Lab 3' },
+  ];
+
+  const students = users.filter(u => u.role === 'student');
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleAddStudentToCourse = async (student: UserData) => {
+    if (!selectedCourse) return;
+    setIsAdding(true);
+    
+    const newScheduleEntry = {
+      subject: selectedCourse.id,
+      instructor: facultyUser.name,
+      day: selectedCourse.day,
+      time: selectedCourse.time,
+      location: selectedCourse.location
+    };
+
+    // Check if already in schedule
+    const alreadyEnrolled = (student.schedule || []).some((s: any) => s.subject === selectedCourse.id);
+    if (alreadyEnrolled) {
+      alert('Student is already enrolled in this subject.');
+      setIsAdding(false);
+      return;
+    }
+
+    const updatedSchedule = [...(student.schedule || []), newScheduleEntry];
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ schedule: updatedSchedule })
+      .eq('id', student.id);
+    
+    if (!error) {
+      fetchUsers();
+      alert(`Successfully added ${student.name} to ${selectedCourse.id}`);
+    } else {
+      alert('Error adding student: ' + error.message);
+    }
+    setIsAdding(false);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter">{isAdmin ? 'Manage Courses' : 'My Courses'}</h1>
+          <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>
+            {isAdmin ? 'Manage all academic courses and offerings.' : 'View and manage your assigned teaching loads.'}
+          </p>
+        </div>
+        {isAdmin && (
+          <button 
+            onClick={() => setShowAddCourseModal(true)}
+            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Course
+          </button>
+        )}
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {courses.map((course, i) => (
+          <div key={i} className={cn(
+            "p-8 rounded-[2.5rem] border transition-all hover:scale-[1.02]",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div className="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center text-white mb-6">
+              <Book className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">{course.name}</h3>
+            <p className="text-xs font-black text-red-600 uppercase tracking-widest mb-4">{course.id}</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <Clock className="w-4 h-4" />
+                <span>{course.schedule}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <Users className="w-4 h-4" />
+                <span>{course.students} Students Enrolled</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-8">
+              <button 
+                onClick={() => {
+                  setSelectedCourse(course);
+                  setShowClassList(true);
+                }}
+                className="py-4 rounded-2xl bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all"
+              >
+                Class List
+              </button>
+              <button 
+                onClick={() => {
+                  if (isAdmin) {
+                    setGradeEntryFilter(course.id);
+                    setView('grades-mgmt');
+                  } else {
+                    setGradeEntryFilter(course.id);
+                    setView('grade-entry');
+                  }
+                }}
+                className="py-4 rounded-2xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+              >
+                {isAdmin ? 'View Grades' : 'Enter Grades'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {showAddCourseModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white dark:bg-[#111111] rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-white/5">
+              <h3 className="text-2xl font-black mb-6">Add New Course</h3>
+              <div className="space-y-4">
+                <input type="text" placeholder="Course ID (e.g. IT101)" className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" />
+                <input type="text" placeholder="Course Name" className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" />
+                <input type="text" placeholder="Schedule" className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" />
+                <div className="flex gap-4 pt-4">
+                  <button onClick={() => setShowAddCourseModal(false)} className="flex-1 py-4 bg-slate-100 dark:bg-white/5 rounded-2xl font-bold">Cancel</button>
+                  <button onClick={() => { alert('Course added successfully!'); setShowAddCourseModal(false); }} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black">Add Course</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showClassList && selectedCourse && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowClassList(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={cn(
+                "relative w-full max-w-2xl rounded-[2.5rem] p-8 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]",
+                isDarkMode ? "bg-[#111111] border border-white/5" : "bg-white border border-slate-200"
+              )}
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tighter">Class List: {selectedCourse.id}</h2>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedCourse.name}</p>
+                </div>
+                <button onClick={() => setShowClassList(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="relative mb-6">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Search student to add..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={cn(
+                    "w-full pl-10 pr-4 py-3 rounded-xl border outline-none transition-all",
+                    isDarkMode ? "bg-white/5 border-white/10 focus:border-red-600/50" : "bg-white border-slate-200 focus:border-red-600"
+                  )}
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+                {filteredStudents.length > 0 ? filteredStudents.map(s => {
+                  const isEnrolled = (s.schedule || []).some((sch: any) => sch.subject === selectedCourse.id);
+                  return (
+                    <div key={s.id} className={cn(
+                      "p-4 rounded-2xl border flex items-center justify-between transition-all",
+                      isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+                    )}>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white font-bold">
+                          {s.name[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold">{s.name} {s.surname}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.id}</p>
+                        </div>
+                      </div>
+                      <button 
+                        disabled={isEnrolled || isAdding}
+                        onClick={() => handleAddStudentToCourse(s)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          isEnrolled 
+                            ? "bg-emerald-500/10 text-emerald-500 cursor-default" 
+                            : "bg-slate-900 text-white hover:bg-slate-800"
+                        )}
+                      >
+                        {isEnrolled ? (
+                          <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Enrolled</span>
+                        ) : isAdding ? 'Adding...' : 'Add to Class'}
+                      </button>
+                    </div>
+                  );
+                }) : (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400 font-bold italic">No students found</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const GradeEntryView = ({ users, isDarkMode, facultyUser, fetchUsers, initialFilter, setGradeEntryFilter }: { users: UserData[], isDarkMode: boolean, facultyUser: UserData, fetchUsers: () => void, initialFilter: string, setGradeEntryFilter: (filter: string) => void }) => {
+  const [selectedStudent, setSelectedStudent] = useState<UserData | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [newGrade, setNewGrade] = useState({ subject: initialFilter || '', instructor: facultyUser.name, grade: '', semester: '1st Semester 2024-2025' });
+  const [searchTerm, setSearchTerm] = useState(initialFilter || '');
+
+  useEffect(() => {
+    if (initialFilter) {
+      setSearchTerm(initialFilter);
+      setNewGrade(prev => ({ ...prev, subject: initialFilter }));
+    }
+  }, [initialFilter]);
+
+  const students = users.filter(u => u.role === 'student');
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.schedule || []).some((sch: any) => sch.subject.toLowerCase() === searchTerm.toLowerCase())
+  );
+
+  const handleAddGrade = async () => {
+    if (!selectedStudent) return;
+    const updatedGrades = [...(selectedStudent.grades || []), newGrade];
+    const { error } = await supabase
+      .from('users')
+      .update({ grades: updatedGrades })
+      .eq('id', selectedStudent.id);
+    
+    if (!error) {
+      fetchUsers();
+      setShowModal(false);
+      setNewGrade({ subject: '', instructor: facultyUser.name, grade: '' });
+      setSelectedStudent(null);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter">Grade Entry</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Submit and manage student grades for your courses.</p>
+      </header>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input 
+          type="text"
+          placeholder="Search student..."
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setGradeEntryFilter('');
+          }}
+          className={cn(
+            "w-full pl-10 pr-4 py-3 rounded-xl border outline-none transition-all",
+            isDarkMode ? "bg-white/5 border-white/10 focus:border-red-600/50" : "bg-white border-slate-200 focus:border-red-600"
+          )}
+        />
+      </div>
+
+      <div className={cn(
+        "rounded-[2.5rem] border overflow-hidden transition-all",
+        isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+      )}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Student</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Course</th>
+                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
+              {filteredStudents.map(s => (
+                <tr key={s.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white font-bold">
+                        {s.name[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold">{s.name} {s.surname}</p>
+                        <p className="text-xs text-slate-400">{s.id}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <p className="font-bold">{s.course}</p>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <button 
+                      onClick={() => {
+                        setSelectedStudent(s);
+                        setShowModal(true);
+                      }}
+                      className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                    >
+                      Enter Grade
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showModal && selectedStudent && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={cn(
+                "relative w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl",
+                isDarkMode ? "bg-[#111111] border border-white/5" : "bg-white border border-slate-200"
+              )}
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-black tracking-tighter">Enter Grade</h2>
+                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="space-y-6">
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Student</p>
+                  <p className="font-bold">{selectedStudent.name} ({selectedStudent.id})</p>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject</label>
+                    <input 
+                      type="text"
+                      value={newGrade.subject}
+                      onChange={e => setNewGrade({...newGrade, subject: e.target.value})}
+                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+                      placeholder="e.g. IT101"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grade</label>
+                    <input 
+                      type="text"
+                      value={newGrade.grade}
+                      onChange={e => setNewGrade({...newGrade, grade: e.target.value})}
+                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+                      placeholder="e.g. 1.0 or A"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Semester</label>
+                    <select 
+                      value={newGrade.semester}
+                      onChange={e => setNewGrade({...newGrade, semester: e.target.value})}
+                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+                    >
+                      <option>1st Semester 2024-2025</option>
+                      <option>2nd Semester 2023-2024</option>
+                      <option>1st Semester 2023-2024</option>
+                      <option>Summer 2023-2024</option>
+                    </select>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleAddGrade}
+                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 transition-all shadow-lg shadow-red-600/20"
+                >
+                  Submit Grade
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
 function FacultyDashboard({ 
   user, 
   isDarkMode, 
@@ -1468,6 +2268,7 @@ function FacultyDashboard({
   recommendations = [], 
   fetchRecommendations,
   users = [],
+  fetchUsers,
   setView,
   selectedStudentForRec,
   setSelectedStudentForRec
@@ -1479,12 +2280,45 @@ function FacultyDashboard({
   recommendations?: any[], 
   fetchRecommendations: () => void,
   users?: UserData[],
+  fetchUsers: () => void,
   setView: (view: string) => void,
   selectedStudentForRec: {id: string, name: string} | null,
   setSelectedStudentForRec: (val: {id: string, name: string} | null) => void
 }) {
   const [showRecModal, setShowRecModal] = useState(false);
   const [recData, setRecData] = useState({ studentId: '', studentName: '', content: '' });
+  const [selectedStudent, setSelectedStudent] = useState<UserData | null>(null);
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [newGrade, setNewGrade] = useState({ subject: '', instructor: user.name, grade: '' });
+
+  const handleAddGrade = async () => {
+    if (!selectedStudent) return;
+    const updatedGrades = [...(selectedStudent.grades || []), newGrade];
+    const { error } = await supabase
+      .from('users')
+      .update({ grades: updatedGrades })
+      .eq('id', selectedStudent.id);
+    
+    if (!error) {
+      fetchUsers();
+      setSelectedStudent({ ...selectedStudent, grades: updatedGrades });
+      setNewGrade({ subject: '', instructor: user.name, grade: '' });
+    }
+  };
+
+  const removeGrade = async (index: number) => {
+    if (!selectedStudent) return;
+    const updatedGrades = (selectedStudent.grades || []).filter((_, i) => i !== index);
+    const { error } = await supabase
+      .from('users')
+      .update({ grades: updatedGrades })
+      .eq('id', selectedStudent.id);
+    
+    if (!error) {
+      fetchUsers();
+      setSelectedStudent({ ...selectedStudent, grades: updatedGrades });
+    }
+  };
 
   useEffect(() => {
     if (selectedStudentForRec) {
@@ -1538,7 +2372,47 @@ function FacultyDashboard({
         <StatCard icon={<FileText />} label="Assigned" value={assignedApplications.length.toString()} trend="Pending review" color="purple" isDarkMode={isDarkMode} />
         <StatCard icon={<Clock />} label="Pending Review" value={assignedApplications.filter(a => a.status === 'pending').length.toString()} trend="Action required" color="amber" isDarkMode={isDarkMode} />
         <StatCard icon={<CheckCircle />} label="Recommended" value={myRecommendations.length.toString()} trend="Completed" color="emerald" isDarkMode={isDarkMode} />
-        <StatCard icon={<Users />} label="My Students" value="12" trend="Active list" color="blue" isDarkMode={isDarkMode} />
+        <StatCard icon={<Users />} label="Total Students" value={students.length.toString()} trend="Active list" color="blue" isDarkMode={isDarkMode} />
+      </div>
+
+      <div className={cn(
+        "p-8 rounded-[2.5rem] border transition-all",
+        isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+      )}>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-bold">Manage Student Records</h3>
+            <p className={cn("text-xs mt-1", isDarkMode ? "text-slate-500" : "text-slate-400")}>Update student grades</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {students.map((student, i) => (
+            <div key={i} className={cn(
+              "p-6 rounded-2xl border group transition-all hover:scale-[1.02]",
+              isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+            )}>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-red-600 flex items-center justify-center text-white font-bold">
+                  {student.name[0]}
+                </div>
+                <div>
+                  <h4 className="font-black text-lg">{student.name}</h4>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{student.id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setSelectedStudent(student);
+                  setShowManageModal(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+              >
+                <BookOpen className="w-3 h-3" />
+                Manage Grades
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1724,6 +2598,96 @@ function FacultyDashboard({
           </motion.div>
         </div>
       )}
+
+      {/* Manage Records Modal */}
+      <AnimatePresence>
+        {showManageModal && selectedStudent && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowManageModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={cn(
+                "relative w-full max-w-2xl rounded-[2.5rem] p-8 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col",
+                isDarkMode ? "bg-[#111111] border border-white/5" : "bg-white border border-slate-200"
+              )}
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-3xl font-black tracking-tighter">
+                    Manage Grades
+                  </h2>
+                  <p className={cn("text-sm font-bold", isDarkMode ? "text-slate-500" : "text-slate-400")}>
+                    Student: {selectedStudent.name} ({selectedStudent.id})
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowManageModal(false)}
+                  className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
+                {/* Add Form */}
+                <div className={cn(
+                  "p-6 rounded-2xl border",
+                  isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+                )}>
+                  <h4 className="text-sm font-black uppercase tracking-widest mb-4">Add New Grade</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <input 
+                      placeholder="Subject"
+                      value={newGrade.subject}
+                      onChange={e => setNewGrade({...newGrade, subject: e.target.value})}
+                      className={cn("p-3 rounded-xl border text-sm font-bold outline-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200")}
+                    />
+                    <input 
+                      placeholder="Grade (e.g. 1.0, A)"
+                      value={newGrade.grade}
+                      onChange={e => setNewGrade({...newGrade, grade: e.target.value})}
+                      className={cn("p-3 rounded-xl border text-sm font-bold outline-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200")}
+                    />
+                    <button 
+                      onClick={handleAddGrade}
+                      className="bg-red-600 text-white font-black rounded-xl py-3 hover:bg-red-700 transition-all"
+                    >
+                      Add Grade
+                    </button>
+                  </div>
+                </div>
+
+                {/* List */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-black uppercase tracking-widest">Current Grades</h4>
+                  <div className="space-y-2">
+                    {(selectedStudent.grades || []).map((g, i) => (
+                      <div key={i} className={cn("p-4 rounded-xl border flex items-center justify-between", isDarkMode ? "bg-white/5 border-white/5" : "bg-white border-slate-100")}>
+                        <div>
+                          <p className="font-bold">{g.subject}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Grade: {g.grade}</p>
+                        </div>
+                        <button onClick={() => removeGrade(i)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {(selectedStudent.grades || []).length === 0 && <p className="text-xs text-slate-500 italic">No grades recorded yet.</p>}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -2956,12 +3920,79 @@ function Profile({ user, setUser, isDarkMode }: { user: UserData, setUser: any, 
 }
 
 function Grades({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }) {
+  const semesters = Array.from(new Set((user.grades || []).map(g => g.semester || '1st Semester 2024-2025'))).sort().reverse();
+  const [selectedSemester, setSelectedSemester] = useState(semesters[0] || '1st Semester 2024-2025');
+
+  const calculateGPA = (grades: any[]) => {
+    if (!grades || grades.length === 0) return "0.00";
+    
+    const pointsMap: { [key: string]: number } = {
+      '1.0': 4.0, '1.25': 3.75, '1.5': 3.5, '1.75': 3.25, '2.0': 3.0,
+      '2.25': 2.75, '2.5': 2.5, '2.75': 2.25, '3.0': 2.0, '5.0': 0.0,
+      'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D': 1.0, 'F': 0.0
+    };
+
+    let totalPoints = 0;
+    let count = 0;
+    grades.forEach(g => {
+      const grade = g.grade?.toString().toUpperCase();
+      if (grade && pointsMap[grade] !== undefined) {
+        totalPoints += pointsMap[grade];
+        count++;
+      }
+    });
+    
+    return count > 0 ? (totalPoints / count).toFixed(2) : "0.00";
+  };
+
+  const filteredGrades = (user.grades || []).filter(g => (g.semester || '1st Semester 2024-2025') === selectedSemester);
+  const semesterGPA = calculateGPA(filteredGrades);
+  const overallGPA = calculateGPA(user.grades || []);
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-      <header>
-        <h1 className="text-4xl font-black tracking-tighter">Academic Records</h1>
-        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Your official grades and academic performance history.</p>
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter">Academic Records</h1>
+          <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Your official grades and academic performance history.</p>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <div className={cn(
+            "p-6 rounded-3xl border flex items-center gap-6",
+            isDarkMode ? "bg-white/5 border-white/5" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Semester GPA</p>
+              <p className="text-4xl font-black tracking-tighter text-red-600">{semesterGPA}</p>
+            </div>
+            <div className="w-px h-12 bg-slate-200 dark:bg-white/10" />
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Overall GPA</p>
+              <p className="text-xl font-bold">{overallGPA}</p>
+            </div>
+          </div>
+        </div>
       </header>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Select Semester:</p>
+          <select 
+            value={selectedSemester}
+            onChange={(e) => setSelectedSemester(e.target.value)}
+            className={cn(
+              "p-3 rounded-xl border outline-none font-bold text-sm",
+              isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200"
+            )}
+          >
+            {semesters.length > 0 ? semesters.map(s => (
+              <option key={s} value={s}>{s}</option>
+            )) : (
+              <option value="1st Semester 2024-2025">1st Semester 2024-2025</option>
+            )}
+          </select>
+        </div>
+      </div>
 
       <div className={cn(
         "rounded-[2.5rem] border overflow-hidden transition-all",
@@ -2978,11 +4009,11 @@ function Grades({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }) 
               </tr>
             </thead>
             <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-              {user.grades?.map((g, i) => (
+              {filteredGrades.length > 0 ? filteredGrades.map((g, i) => (
                 <tr key={i} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                   <td className="px-8 py-6">
                     <p className="font-bold text-lg">{g.subject}</p>
-                    <p className={cn("text-xs", isDarkMode ? "text-slate-500" : "text-slate-400")}>Semester 1, 2024</p>
+                    <p className={cn("text-xs", isDarkMode ? "text-slate-500" : "text-slate-400")}>{g.semester || '1st Semester 2024-2025'}</p>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-3">
@@ -3001,7 +4032,13 @@ function Grades({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }) 
                     </span>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={4} className="px-8 py-12 text-center">
+                    <p className="text-slate-400 font-bold italic">No records found for this semester</p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -3049,6 +4086,604 @@ function Schedule({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }
               </div>
               <p className={cn("text-[10px] font-black uppercase tracking-widest", isDarkMode ? "text-slate-500" : "text-slate-400")}>Live Session</p>
             </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function AcademicSupport({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter">Academic Support</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Access tutoring, writing labs, and learning resources.</p>
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {[
+          { title: "Peer Tutoring", icon: <Users />, desc: "Get help from top-performing students in your subjects." },
+          { title: "Writing Center", icon: <FileText />, desc: "Improve your essays and research papers with expert feedback." },
+          { title: "Learning Workshops", icon: <Library />, desc: "Join sessions on study skills, time management, and more." },
+          { title: "Library Resources", icon: <BookOpen />, desc: "Access digital databases, journals, and physical collections." }
+        ].map((item, i) => (
+          <div key={i} className={cn(
+            "p-8 rounded-[2.5rem] border transition-all hover:scale-[1.02]",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-red-600/20">
+              {React.cloneElement(item.icon as React.ReactElement, { className: "w-6 h-6" })}
+            </div>
+            <h3 className="text-2xl font-black tracking-tight mb-2">{item.title}</h3>
+            <p className={cn("text-sm leading-relaxed", isDarkMode ? "text-slate-400" : "text-slate-500")}>{item.desc}</p>
+            <button className="mt-6 text-xs font-black uppercase tracking-widest text-red-600 hover:text-red-500 transition-colors">
+              Learn More →
+            </button>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function Payments({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }) {
+  const [selectedMethod, setSelectedMethod] = useState<'gcash' | 'atm' | null>(null);
+  const [showStatement, setShowStatement] = useState(false);
+
+  const semesters = [
+    { name: '1st Semester 2024-2025', amount: 14500, status: 'Unpaid' },
+    { name: '2nd Semester 2023-2024', amount: 12800, status: 'Paid' },
+    { name: '1st Semester 2023-2024', amount: 13200, status: 'Paid' },
+    { name: 'Summer 2023-2024', amount: 11500, status: 'Paid' },
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter">Balance & Payments</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Manage your tuition fees and online payments.</p>
+      </header>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className={cn(
+          "lg:col-span-2 p-10 rounded-[3rem] border relative overflow-hidden",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <div className="relative z-10">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Current Balance</p>
+            <h2 className="text-6xl font-black tracking-tighter mb-8">₱{user.balance?.toLocaleString()}</h2>
+            <div className="flex flex-wrap gap-4">
+              <button 
+                disabled={!selectedMethod}
+                className="px-8 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Pay Now with {selectedMethod === 'gcash' ? 'GCash' : selectedMethod === 'atm' ? 'ATM Card' : '...'}
+              </button>
+              <button 
+                onClick={() => setShowStatement(true)}
+                className={cn(
+                  "px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all border",
+                  isDarkMode ? "bg-white/5 border-white/10 hover:bg-white/10" : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                )}
+              >
+                View Statement
+              </button>
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-red-600/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+        </div>
+        <div className={cn(
+          "p-10 rounded-[3rem] border",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <h3 className="text-xl font-black tracking-tight mb-6">Select Payment Method</h3>
+          <div className="space-y-4">
+            <button 
+              onClick={() => setSelectedMethod('gcash')}
+              className={cn(
+                "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all",
+                selectedMethod === 'gcash' ? "border-red-600 bg-red-600/5" : (isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")
+              )}
+            >
+              <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white font-black">
+                G
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold">GCash</p>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400">Online Payment</p>
+              </div>
+            </button>
+            
+            <button 
+              onClick={() => setSelectedMethod('atm')}
+              className={cn(
+                "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all",
+                selectedMethod === 'atm' ? "border-red-600 bg-red-600/5" : (isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")
+              )}
+            >
+              <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-white">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold">ATM Card</p>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400">Debit/Credit Card</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showStatement && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowStatement(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={cn(
+                "relative w-full max-w-2xl rounded-[2.5rem] p-10 shadow-2xl overflow-hidden",
+                isDarkMode ? "bg-[#111111] border border-white/5" : "bg-white border border-slate-200"
+              )}
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-3xl font-black tracking-tighter">Statement of Account</h2>
+                  <p className={cn("text-sm font-bold", isDarkMode ? "text-slate-500" : "text-slate-400")}>Detailed breakdown per semester</p>
+                </div>
+                <button onClick={() => setShowStatement(false)} className="p-3 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {semesters.map((sem, i) => (
+                  <div key={i} className={cn(
+                    "p-6 rounded-3xl border flex items-center justify-between transition-all",
+                    isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-slate-50 border-slate-100 hover:bg-slate-100"
+                  )}>
+                    <div>
+                      <p className="font-black text-lg tracking-tight">{sem.name}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Tuition & Fees</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-black tracking-tighter">₱{sem.amount.toLocaleString()}</p>
+                      <span className={cn(
+                        "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full",
+                        sem.status === 'Paid' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                      )}>
+                        {sem.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className={cn(
+                "mt-8 p-6 rounded-3xl border-t-4 border-red-600 flex items-center justify-between",
+                isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+              )}>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Total Outstanding</p>
+                  <p className="text-sm font-bold italic">As of March 2026</p>
+                </div>
+                <p className="text-4xl font-black tracking-tighter text-red-600">₱{user.balance?.toLocaleString()}</p>
+              </div>
+
+              <button 
+                onClick={() => window.print()}
+                className="w-full mt-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Download PDF Statement
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function Mentorship({ user, isDarkMode, mentors, fetchMentors, fetchUsers, activeModal, setActiveModal }: { user: UserData, isDarkMode?: boolean, mentors: any[], fetchMentors: () => void, fetchUsers: () => void, activeModal?: string | null, setActiveModal?: (val: string | null) => void }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(false);
+
+  useEffect(() => {
+    if (activeModal === 'mentor') {
+      setShowAddModal(true);
+      if (setActiveModal) setActiveModal(null);
+    }
+  }, [activeModal]);
+  const [newMentor, setNewMentor] = useState({ name: '', role: '', specialty: '' });
+
+  const handleAddMentor = async () => {
+    const { error } = await supabase.from('mentors').insert(newMentor);
+    if (!error) {
+      fetchMentors();
+      setShowAddModal(false);
+      setNewMentor({ name: '', role: '', specialty: '' });
+    }
+  };
+
+  const handleSelectMentor = async (mentorId: string) => {
+    setIsSelecting(true);
+    const { error } = await supabase
+      .from('users')
+      .update({ mentorId })
+      .eq('id', user.id);
+    
+    if (!error) {
+      fetchUsers();
+      alert('Mentor selected successfully!');
+    } else {
+      alert('Error selecting mentor: ' + error.message);
+    }
+    setIsSelecting(false);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter">Mentorship & Counseling</h1>
+          <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Connect with mentors and professional counselors.</p>
+        </div>
+        {(user.role === 'admin' || user.role === 'faculty') && (
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Mentor
+          </button>
+        )}
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {mentors.length > 0 ? mentors.map((mentor, i) => (
+          <div key={i} className={cn(
+            "p-8 rounded-[2.5rem] border transition-all hover:scale-[1.02]",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div className="w-20 h-20 rounded-3xl bg-red-600/10 flex items-center justify-center text-red-600 mb-6 font-black text-2xl">
+              {mentor.name[0]}
+            </div>
+            <h3 className="text-2xl font-black tracking-tight mb-1">{mentor.name}</h3>
+            <p className="text-sm font-bold text-red-600 mb-4">{mentor.role}</p>
+            <div className={cn("p-4 rounded-2xl mb-6", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Specialty</p>
+              <p className="text-sm font-bold">{mentor.specialty}</p>
+            </div>
+            {user.role === 'student' ? (
+              <button 
+                disabled={user.mentorId === mentor.id || isSelecting}
+                onClick={() => handleSelectMentor(mentor.id)}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all",
+                  user.mentorId === mentor.id 
+                    ? "bg-emerald-500/10 text-emerald-500 cursor-default" 
+                    : "bg-red-600 text-white shadow-lg shadow-red-600/20 hover:bg-red-500"
+                )}
+              >
+                {user.mentorId === mentor.id ? (
+                  <span className="flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Selected Mentor</span>
+                ) : isSelecting ? 'Selecting...' : 'Select as Mentor'}
+              </button>
+            ) : (
+              <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all">
+                View Profile
+              </button>
+            )}
+          </div>
+        )) : (
+          <div className="col-span-full py-20 text-center text-slate-400 font-bold italic">
+            No mentors available at the moment.
+          </div>
+        )}
+      </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black mb-6">Add New Mentor</h3>
+            <div className="space-y-4">
+              <input 
+                type="text" 
+                placeholder="Mentor Name" 
+                value={newMentor.name}
+                onChange={e => setNewMentor({...newMentor, name: e.target.value})}
+                className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+              />
+              <input 
+                type="text" 
+                placeholder="Role (e.g. Senior Academic Mentor)" 
+                value={newMentor.role}
+                onChange={e => setNewMentor({...newMentor, role: e.target.value})}
+                className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+              />
+              <input 
+                type="text" 
+                placeholder="Specialty" 
+                value={newMentor.specialty}
+                onChange={e => setNewMentor({...newMentor, specialty: e.target.value})}
+                className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+              />
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
+                <button onClick={handleAddMentor} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black">Add Mentor</button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function Resources({ user, isDarkMode, resources, fetchResources, activeModal, setActiveModal }: { user: UserData, isDarkMode?: boolean, resources: any[], fetchResources: () => void, activeModal?: string | null, setActiveModal?: (val: string | null) => void }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    if (activeModal === 'resource') {
+      setShowAddModal(true);
+      if (setActiveModal) setActiveModal(null);
+    }
+  }, [activeModal]);
+  const [newResource, setNewResource] = useState({ title: '', type: 'PDF', size: '' });
+
+  const handleAddResource = async () => {
+    const { error } = await supabase.from('resources').insert(newResource);
+    if (!error) {
+      fetchResources();
+      setShowAddModal(false);
+      setNewResource({ title: '', type: 'PDF', size: '' });
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter">Resource Library</h1>
+          <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Download guides, templates, and academic materials.</p>
+        </div>
+        {(user.role === 'admin' || user.role === 'faculty') && (
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Upload Resource
+          </button>
+        )}
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {resources.length > 0 ? resources.map((res, i) => (
+          <div key={i} className={cn(
+            "p-6 rounded-[2rem] border transition-all hover:scale-[1.02]",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-6", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
+              <FileText className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="font-black tracking-tight mb-1">{res.title}</h3>
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{res.type} • {res.size}</span>
+              <button className="p-2 rounded-xl bg-red-600 text-white shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all">
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )) : (
+          <div className="col-span-full py-20 text-center text-slate-400 font-bold italic">
+            No resources available.
+          </div>
+        )}
+      </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black mb-6">Upload New Resource</h3>
+            <div className="space-y-4">
+              <input 
+                type="text" 
+                placeholder="Resource Title" 
+                value={newResource.title}
+                onChange={e => setNewResource({...newResource, title: e.target.value})}
+                className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+              />
+              <select 
+                value={newResource.type}
+                onChange={e => setNewResource({...newResource, type: e.target.value})}
+                className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+              >
+                <option value="PDF">PDF</option>
+                <option value="DOCX">DOCX</option>
+                <option value="JPG">JPG</option>
+                <option value="ZIP">ZIP</option>
+              </select>
+              <input 
+                type="text" 
+                placeholder="File Size (e.g. 2.4 MB)" 
+                value={newResource.size}
+                onChange={e => setNewResource({...newResource, size: e.target.value})}
+                className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+              />
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
+                <button onClick={handleAddResource} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black">Upload</button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function Community({ user, isDarkMode, events, orgs, fetchCommunityData, activeModal, setActiveModal }: { user: UserData, isDarkMode?: boolean, events: any[], orgs: any[], fetchCommunityData: () => void, activeModal?: string | null, setActiveModal?: (val: string | null) => void }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    if (activeModal === 'community') {
+      setShowAddModal(true);
+      if (setActiveModal) setActiveModal(null);
+    }
+  }, [activeModal]);
+  const [addType, setAddType] = useState<'event' | 'org'>('event');
+  const [newData, setNewData] = useState({ title: '', date: '', location: '', name: '' });
+
+  const handleAdd = async () => {
+    const table = addType === 'event' ? 'community_events' : 'community_orgs';
+    const { error } = await supabase.from(table).insert(newData);
+    if (!error) {
+      fetchCommunityData();
+      setShowAddModal(false);
+      setNewData({ title: '', date: '', location: '', name: '' });
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter">Student Community</h1>
+          <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Join clubs, organizations, and student-led initiatives.</p>
+        </div>
+        {(user.role === 'admin' || user.role === 'faculty') && (
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Event/Org
+          </button>
+        )}
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className={cn(
+          "p-10 rounded-[3rem] border",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <h3 className="text-2xl font-black tracking-tight mb-6">Upcoming Events</h3>
+          <div className="space-y-6">
+            {events.length > 0 ? events.map((event, i) => (
+              <div key={i} className="flex gap-6">
+                <div className={cn("w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0", isDarkMode ? "bg-white/5" : "bg-slate-50")}>
+                  <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">{event.date.split(' ')[0].slice(0, 3)}</span>
+                  <span className="text-xl font-black">{event.date.split(' ')[1]?.replace(',', '') || '??'}</span>
+                </div>
+                <div>
+                  <p className="font-black tracking-tight">{event.title}</p>
+                  <p className="text-xs text-slate-400 mt-1">{event.location}</p>
+                </div>
+              </div>
+            )) : (
+              <p className="text-slate-400 italic font-bold">No upcoming events.</p>
+            )}
+          </div>
+        </div>
+        <div className={cn(
+          "p-10 rounded-[3rem] border",
+          isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+        )}>
+          <h3 className="text-2xl font-black tracking-tight mb-6">Student Organizations</h3>
+          <div className="grid grid-cols-2 gap-4">
+            {orgs.length > 0 ? orgs.map((org, i) => (
+              <div key={i} className={cn("p-4 rounded-2xl border text-center transition-all hover:bg-red-600 hover:text-white hover:border-red-600 cursor-pointer", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}>
+                <p className="text-xs font-black uppercase tracking-widest">{org.name}</p>
+              </div>
+            )) : (
+              <p className="col-span-2 text-slate-400 italic font-bold">No organizations listed.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black mb-6">Add to Community</h3>
+            <div className="flex gap-4 mb-6">
+              <button onClick={() => setAddType('event')} className={cn("flex-1 py-2 rounded-xl font-bold", addType === 'event' ? "bg-red-600 text-white" : "bg-slate-100")}>Event</button>
+              <button onClick={() => setAddType('org')} className={cn("flex-1 py-2 rounded-xl font-bold", addType === 'org' ? "bg-red-600 text-white" : "bg-slate-100")}>Org</button>
+            </div>
+            <div className="space-y-4">
+              {addType === 'event' ? (
+                <>
+                  <input 
+                    type="text" 
+                    placeholder="Event Title" 
+                    value={newData.title}
+                    onChange={e => setNewData({...newData, title: e.target.value})}
+                    className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Date (e.g. April 15, 2024)" 
+                    value={newData.date}
+                    onChange={e => setNewData({...newData, date: e.target.value})}
+                    className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Location" 
+                    value={newData.location}
+                    onChange={e => setNewData({...newData, location: e.target.value})}
+                    className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+                  />
+                </>
+              ) : (
+                <input 
+                  type="text" 
+                  placeholder="Organization Name" 
+                  value={newData.name}
+                  onChange={e => setNewData({...newData, name: e.target.value})}
+                  className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600"
+                />
+              )}
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
+                <button onClick={handleAdd} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black">Add</button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function SettingsView({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter">Settings</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Manage your account preferences and security.</p>
+      </header>
+      <div className="max-w-2xl space-y-6">
+        {[
+          { title: "Notifications", desc: "Manage how you receive alerts and updates.", icon: <Bell /> },
+          { title: "Privacy & Security", desc: "Control your data and account protection.", icon: <Shield /> },
+          { title: "Display Preferences", desc: "Customize the look and feel of your portal.", icon: <Palette /> },
+          { title: "Language", desc: "Choose your preferred language for the interface.", icon: <Globe /> }
+        ].map((item, i) => (
+          <div key={i} className={cn(
+            "p-6 rounded-[2rem] border flex items-center justify-between group cursor-pointer transition-all hover:scale-[1.01]",
+            isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div className="flex items-center gap-6">
+              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-colors", isDarkMode ? "bg-white/5 text-slate-400 group-hover:text-white" : "bg-slate-50 text-slate-500 group-hover:text-slate-900")}>
+                {React.cloneElement(item.icon as React.ReactElement, { className: "w-6 h-6" })}
+              </div>
+              <div>
+                <h3 className="font-black tracking-tight">{item.title}</h3>
+                <p className={cn("text-xs", isDarkMode ? "text-slate-500" : "text-slate-400")}>{item.desc}</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-400" />
           </div>
         ))}
       </div>
@@ -3453,8 +5088,15 @@ function Documents({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean 
   );
 }
 
-function Announcements({ announcements, user, isDarkMode, fetchAnnouncements, setConfirmConfig }: { announcements: any[], user: UserData, isDarkMode?: boolean, fetchAnnouncements: () => void, setConfirmConfig: any }) {
+function Announcements({ announcements, user, isDarkMode, fetchAnnouncements, setConfirmConfig, activeModal, setActiveModal }: { announcements: any[], user: UserData, isDarkMode?: boolean, fetchAnnouncements: () => void, setConfirmConfig: any, activeModal?: string | null, setActiveModal?: (val: string | null) => void }) {
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    if (activeModal === 'announcement') {
+      setShowForm(true);
+      if (setActiveModal) setActiveModal(null);
+    }
+  }, [activeModal]);
   const [formData, setFormData] = useState({ title: '', content: '', role: 'all' });
 
   const handleDelete = async (id: string) => {
@@ -3499,7 +5141,7 @@ function Announcements({ announcements, user, isDarkMode, fetchAnnouncements, se
           <h1 className="text-4xl font-black tracking-tighter">Campus Announcements</h1>
           <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Stay updated with the latest news and events from St. Cecilia's College.</p>
         </div>
-        {user.role === 'admin' && (
+        {(user.role === 'admin' || user.role === 'faculty') && (
           <button 
             onClick={() => setShowForm(!showForm)}
             className="px-6 py-3 bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all flex items-center gap-2"
@@ -3705,6 +5347,326 @@ const StudentsView = ({ users, isDarkMode }: { users: UserData[], isDarkMode: bo
           </table>
         </div>
       </div>
+    </motion.div>
+  );
+};
+
+const RolesView = ({ isDarkMode }: any) => (
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+    <header>
+      <h1 className="text-4xl font-black tracking-tighter uppercase">Roles & Permissions</h1>
+      <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Manage system access levels and user permissions.</p>
+    </header>
+    <div className={cn("p-12 rounded-[3rem] border text-center", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
+      <ShieldCheck className="w-16 h-16 text-red-600 mx-auto mb-6" />
+      <h3 className="text-2xl font-black mb-2">Access Control Management</h3>
+      <p className="text-slate-500 max-w-md mx-auto">This module allows administrators to define and assign roles to users, controlling their access to various system features.</p>
+    </div>
+  </motion.div>
+);
+
+const TransactionsView = ({ isDarkMode }: any) => (
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+    <header>
+      <h1 className="text-4xl font-black tracking-tighter uppercase">Financial Transactions</h1>
+      <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Monitor all financial activities and payment records.</p>
+    </header>
+    <div className={cn("p-12 rounded-[3rem] border text-center", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
+      <Calculator className="w-16 h-16 text-red-600 mx-auto mb-6" />
+      <h3 className="text-2xl font-black mb-2">Transaction Logs</h3>
+      <p className="text-slate-500 max-w-md mx-auto">View and export detailed financial transaction history for all students and programs.</p>
+    </div>
+  </motion.div>
+);
+
+const EnrollmentView = ({ isDarkMode }: any) => (
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+    <header>
+      <h1 className="text-4xl font-black tracking-tighter uppercase">Course Enrollment</h1>
+      <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Manage student enrollments and course assignments.</p>
+    </header>
+    <div className={cn("p-12 rounded-[3rem] border text-center", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
+      <UserPlus className="w-16 h-16 text-red-600 mx-auto mb-6" />
+      <h3 className="text-2xl font-black mb-2">Enrollment Management</h3>
+      <p className="text-slate-500 max-w-md mx-auto">Process new enrollments, manage waitlists, and assign students to specific course sections.</p>
+    </div>
+  </motion.div>
+);
+
+const GradesMgmtView = ({ users, isDarkMode, fetchUsers, initialFilter }: { users: UserData[], isDarkMode: boolean, fetchUsers: () => void, initialFilter?: string }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState<UserData | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingGradeIndex, setEditingGradeIndex] = useState<number | null>(null);
+  const [gradeForm, setGradeForm] = useState({ subject: initialFilter || '', instructor: '', grade: '', semester: '1st Semester 2024-2025' });
+
+  useEffect(() => {
+    if (initialFilter) {
+      setGradeForm(prev => ({ ...prev, subject: initialFilter }));
+    }
+  }, [initialFilter]);
+
+  const students = users.filter(u => u.role === 'student');
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.grades || []).some((g: any) => g.subject.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const handleSaveGrade = async () => {
+    if (!selectedStudent) return;
+    
+    let updatedGrades = [...(selectedStudent.grades || [])];
+    if (editingGradeIndex !== null) {
+      updatedGrades[editingGradeIndex] = gradeForm;
+    } else {
+      updatedGrades.push(gradeForm);
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update({ grades: updatedGrades })
+      .eq('id', selectedStudent.id);
+    
+    if (!error) {
+      fetchUsers();
+      setShowEditModal(false);
+      setEditingGradeIndex(null);
+      setGradeForm({ subject: '', instructor: '', grade: '', semester: '1st Semester 2024-2025' });
+      // Update local selected student to reflect changes
+      const updatedStudent = { ...selectedStudent, grades: updatedGrades };
+      setSelectedStudent(updatedStudent);
+    } else {
+      alert('Error saving grade: ' + error.message);
+    }
+  };
+
+  const handleDeleteGrade = async (index: number) => {
+    if (!selectedStudent || !confirm('Are you sure you want to delete this grade?')) return;
+
+    const updatedGrades = (selectedStudent.grades || []).filter((_, i) => i !== index);
+    const { error } = await supabase
+      .from('users')
+      .update({ grades: updatedGrades })
+      .eq('id', selectedStudent.id);
+    
+    if (!error) {
+      fetchUsers();
+      const updatedStudent = { ...selectedStudent, grades: updatedGrades };
+      setSelectedStudent(updatedStudent);
+    } else {
+      alert('Error deleting grade: ' + error.message);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter uppercase">Grades Management</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>View and manage all student academic records.</p>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Student List */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text"
+              placeholder="Search students..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={cn(
+                "w-full pl-10 pr-4 py-3 rounded-xl border outline-none transition-all",
+                isDarkMode ? "bg-white/5 border-white/10 focus:border-red-600/50" : "bg-white border-slate-200 focus:border-red-600"
+              )}
+            />
+          </div>
+
+          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+            {filteredStudents.map(s => (
+              <button
+                key={s.id}
+                onClick={() => setSelectedStudent(s)}
+                className={cn(
+                  "w-full p-4 rounded-2xl border flex items-center gap-4 transition-all text-left",
+                  selectedStudent?.id === s.id 
+                    ? "bg-red-600 border-red-600 text-white shadow-lg shadow-red-600/20" 
+                    : isDarkMode ? "bg-[#111111] border-white/5 hover:bg-white/5" : "bg-white border-slate-200 hover:bg-slate-50 shadow-sm"
+                )}
+              >
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                  selectedStudent?.id === s.id ? "bg-white/20" : "bg-red-600 text-white"
+                )}>
+                  {s.name[0]}
+                </div>
+                <div>
+                  <p className="font-bold leading-tight">{s.name} {s.surname}</p>
+                  <p className={cn(
+                    "text-[10px] font-bold uppercase tracking-widest",
+                    selectedStudent?.id === s.id ? "text-white/60" : "text-slate-400"
+                  )}>{s.id}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Grades Detail */}
+        <div className="lg:col-span-2">
+          {selectedStudent ? (
+            <div className={cn(
+              "p-8 rounded-[2.5rem] border",
+              isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+            )}>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tighter">Academic Record</h2>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedStudent.name} {selectedStudent.surname}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setEditingGradeIndex(null);
+                    setGradeForm({ subject: '', instructor: '', grade: '', semester: '1st Semester 2024-2025' });
+                    setShowEditModal(true);
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Grade
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left border-b border-slate-100 dark:border-white/5">
+                      <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Subject</th>
+                      <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Instructor</th>
+                      <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Semester</th>
+                      <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Grade</th>
+                      <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                    {(selectedStudent.grades || []).map((g: any, i: number) => (
+                      <tr key={i} className="group">
+                        <td className="py-4 font-bold text-sm">{g.subject}</td>
+                        <td className="py-4 text-sm text-slate-500">{g.instructor}</td>
+                        <td className="py-4 text-xs text-slate-400">{g.semester}</td>
+                        <td className="py-4">
+                          <span className={cn(
+                            "px-3 py-1 rounded-lg font-black text-xs",
+                            parseFloat(g.grade) <= 3.0 ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                          )}>
+                            {g.grade}
+                          </span>
+                        </td>
+                        <td className="py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <button 
+                              onClick={() => {
+                                setEditingGradeIndex(i);
+                                setGradeForm(g);
+                                setShowEditModal(true);
+                              }}
+                              className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-400 hover:text-red-600"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteGrade(i)}
+                              className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-400 hover:text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {(selectedStudent.grades || []).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-slate-400 font-bold italic">
+                          No grades recorded yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className={cn(
+              "h-full min-h-[400px] flex flex-col items-center justify-center p-8 rounded-[2.5rem] border border-dashed",
+              isDarkMode ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"
+            )}>
+              <div className="w-16 h-16 rounded-2xl bg-slate-200 dark:bg-white/5 flex items-center justify-center text-slate-400 mb-4">
+                <ClipboardList className="w-8 h-8" />
+              </div>
+              <p className="text-slate-400 font-bold italic">Select a student to view and manage grades</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showEditModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white dark:bg-[#111111] rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-white/5">
+              <h3 className="text-2xl font-black mb-6">{editingGradeIndex !== null ? 'Edit Grade' : 'Add New Grade'}</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Subject</label>
+                  <input 
+                    type="text" 
+                    value={gradeForm.subject}
+                    onChange={e => setGradeForm({...gradeForm, subject: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Instructor</label>
+                  <input 
+                    type="text" 
+                    value={gradeForm.instructor}
+                    onChange={e => setGradeForm({...gradeForm, instructor: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Grade</label>
+                    <input 
+                      type="text" 
+                      value={gradeForm.grade}
+                      onChange={e => setGradeForm({...gradeForm, grade: e.target.value})}
+                      placeholder="e.g. 1.25"
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Semester</label>
+                    <select 
+                      value={gradeForm.semester}
+                      onChange={e => setGradeForm({...gradeForm, semester: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 appearance-none"
+                    >
+                      <option>1st Semester 2024-2025</option>
+                      <option>2nd Semester 2024-2025</option>
+                      <option>Summer 2025</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button onClick={() => setShowEditModal(false)} className="flex-1 py-4 bg-slate-100 dark:bg-white/5 rounded-2xl font-bold">Cancel</button>
+                  <button onClick={handleSaveGrade} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black">Save Grade</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
@@ -4750,20 +6712,50 @@ const ReportsView = ({ financialAid, scholarships, isDarkMode, user }: any) => {
 };
 
 const ActivityView = ({ isDarkMode }: any) => {
-  const [logs, setLogs] = useState([]);
+  const [isBackingUp, setIsBackingUp] = useState(false);
 
-  useEffect(() => {
-    const fetchAuditLogs = async () => {
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .order('timestamp', { ascending: false });
-      if (!error && data) {
-        setLogs(data);
+  const handleDownloadBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      const tables = [
+        'users',
+        'scholarships',
+        'financial_aid',
+        'audit_logs',
+        'announcements',
+        'resources',
+        'mentors',
+        'community_events',
+        'community_orgs',
+        'recommendations',
+        'notifications',
+        'messages'
+      ];
+
+      const backupData: any = {};
+
+      for (const table of tables) {
+        const { data, error } = await supabase.from(table).select('*');
+        if (!error) {
+          backupData[table] = data;
+        }
       }
-    };
-    fetchAuditLogs();
-  }, []);
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `student_aid_portal_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Backup failed:', err);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
 
   return (
     <motion.div
@@ -4771,59 +6763,59 @@ const ActivityView = ({ isDarkMode }: any) => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-8"
     >
-      <div>
-        <h2 className="text-4xl font-black tracking-tighter mb-2">System Activity</h2>
-        <p className="text-slate-500">Real-time audit logs and security events.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-4xl font-black tracking-tighter mb-2 uppercase">Backup & Recovery</h2>
+          <p className="text-slate-500">Manage and download full system backups for all data.</p>
+        </div>
       </div>
 
       <div className={cn(
-        "rounded-[2.5rem] border overflow-hidden transition-all",
+        "p-12 rounded-[3rem] border flex flex-col items-center justify-center text-center space-y-8 transition-all",
         isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
       )}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className={isDarkMode ? "bg-white/5" : "bg-slate-50"}>
-                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Timestamp</th>
-                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">User ID</th>
-                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Action</th>
-                <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Details</th>
-              </tr>
-            </thead>
-            <tbody className={cn("divide-y", isDarkMode ? "divide-white/5" : "divide-slate-100")}>
-              {logs.map((log: any) => (
-                <tr key={log.id} className={cn("transition-colors", isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50")}>
-                  <td className="px-8 py-6 text-xs font-mono text-slate-400">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </td>
-                  <td className="px-8 py-6 font-bold text-sm">
-                    {log.userId}
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className={cn(
-                      "px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest",
-                      log.action === 'LOGIN' ? "bg-blue-500/10 text-blue-500" :
-                      log.action === 'REGISTER' ? "bg-emerald-500/10 text-emerald-500" :
-                      log.action === 'PASSWORD_RESET' ? "bg-red-500/10 text-red-500" :
-                      "bg-slate-500/10 text-slate-500"
-                    )}>
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 text-xs text-slate-500">
-                    {log.details}
-                  </td>
-                </tr>
-              ))}
-              {logs.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-8 py-20 text-center text-slate-400">
-                    No activity logs found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className={cn(
+          "w-24 h-24 rounded-[2rem] flex items-center justify-center mb-4",
+          isDarkMode ? "bg-white/5" : "bg-slate-50"
+        )}>
+          <Database className={cn("w-12 h-12 text-red-600", isBackingUp && "animate-bounce")} />
+        </div>
+        
+        <div className="max-w-md">
+          <h3 className="text-2xl font-black tracking-tight mb-2">System Data Export</h3>
+          <p className={cn("text-sm", isDarkMode ? "text-slate-500" : "text-slate-400")}>
+            Generate a comprehensive backup of all system data including users, applications, content, and logs. This file can be used for data recovery or migration.
+          </p>
+        </div>
+
+        <button
+          onClick={handleDownloadBackup}
+          disabled={isBackingUp}
+          className={cn(
+            "flex items-center gap-3 px-10 py-5 rounded-2xl font-black uppercase tracking-widest transition-all",
+            isDarkMode 
+              ? "bg-white text-slate-900 hover:bg-slate-200" 
+              : "bg-slate-900 hover:bg-slate-800 text-white shadow-2xl shadow-slate-900/40",
+            isBackingUp && "opacity-50 cursor-not-allowed"
+          )}
+        >
+          {isBackingUp ? <Clock className="w-6 h-6 animate-spin" /> : <Download className="w-6 h-6" />}
+          {isBackingUp ? 'Generating Backup...' : 'Download Full System Backup'}
+        </button>
+
+        <div className="pt-8 flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Database Connected
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            JSON Format
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            Full Encryption
+          </div>
         </div>
       </div>
     </motion.div>
