@@ -193,6 +193,7 @@ export default function App() {
 
   const [mentors, setMentors] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [communityEvents, setCommunityEvents] = useState<any[]>([]);
   const [communityOrgs, setCommunityOrgs] = useState<any[]>([]);
 
@@ -209,6 +210,7 @@ export default function App() {
       fetchPolicies();
       fetchMentors();
       fetchResources();
+      fetchCourses();
       fetchCommunityData();
     }
   }, [user]);
@@ -221,6 +223,11 @@ export default function App() {
   const fetchResources = async () => {
     const { data, error } = await supabase.from('resources').select('*');
     if (!error && data) setResources(data);
+  };
+
+  const fetchCourses = async () => {
+    const { data, error } = await supabase.from('courses').select('*');
+    if (!error && data) setCourses(data);
   };
 
   const fetchCommunityData = async () => {
@@ -969,11 +976,9 @@ export default function App() {
               <>
                 <NavCategory label="USER MANAGEMENT" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Users />} label="Users" active={view === 'admin'} onClick={() => setView('admin')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<ShieldCheck />} label="Roles & Permissions" active={view === 'roles'} onClick={() => setView('roles')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-
+                
                 <NavCategory label="FINANCIAL MANAGEMENT" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<DollarSign />} label="Financial Aid Applications" active={view === 'applications'} onClick={() => setView('applications')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
-                <NavItem icon={<Calculator />} label="Transactions" active={view === 'transactions'} onClick={() => setView('transactions')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
 
                 <NavCategory label="ACADEMIC" collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
                 <NavItem icon={<Book />} label="Courses" active={view === 'courses'} onClick={() => setView('courses')} collapsed={!isSidebarOpen} isDarkMode={isDarkMode} />
@@ -1221,7 +1226,7 @@ export default function App() {
             {view === 'profile' && <Profile user={user} setUser={setUser} isDarkMode={isDarkMode} />}
             {view === 'grades' && <Grades user={user} isDarkMode={isDarkMode} />}
             {view === 'schedule' && <Schedule user={user} isDarkMode={isDarkMode} />}
-            {view === 'courses' && <CoursesView isDarkMode={isDarkMode} setView={setView} setGradeEntryFilter={setGradeEntryFilter} users={users} fetchUsers={fetchUsers} facultyUser={user} />}
+            {view === 'courses' && <CoursesView isDarkMode={isDarkMode} setView={setView} setGradeEntryFilter={setGradeEntryFilter} users={users} fetchUsers={fetchUsers} facultyUser={user} courses={courses} fetchCourses={fetchCourses} isAdmin={user.role === 'admin'} />}
             {view === 'grade-entry' && <GradeEntryView users={users} isDarkMode={isDarkMode} facultyUser={user} fetchUsers={fetchUsers} initialFilter={gradeEntryFilter} setGradeEntryFilter={setGradeEntryFilter} />}
             {view === 'finance' && <FinancialAid user={user} financialAid={financialAid} fetchFinancialAid={fetchFinancialAid} isDarkMode={isDarkMode} selectedScholarship={selectedScholarship} setSelectedScholarship={setSelectedScholarship} />}
             {view === 'messages' && <Messages user={user} messages={messages} fetchMessages={fetchMessages} users={users} isDarkMode={isDarkMode} />}
@@ -1230,7 +1235,7 @@ export default function App() {
             {view === 'admin' && <AdminPanel users={users} fetchUsers={fetchUsers} isDarkMode={isDarkMode} setConfirmConfig={setConfirmConfig} />}
             {view === 'roles' && <RolesView isDarkMode={isDarkMode} />}
             {view === 'transactions' && <TransactionsView isDarkMode={isDarkMode} />}
-            {view === 'enrollment' && <EnrollmentView isDarkMode={isDarkMode} />}
+            {view === 'enrollment' && <EnrollmentView isDarkMode={isDarkMode} users={users} courses={courses} fetchUsers={fetchUsers} />}
             {view === 'grades-mgmt' && <GradesMgmtView users={users} isDarkMode={isDarkMode} fetchUsers={fetchUsers} initialFilter={gradeEntryFilter} />}
             {view === 'students' && <StudentsView users={users} isDarkMode={isDarkMode} />}
             {view === 'policies' && <PoliciesView policies={policies} isDarkMode={isDarkMode} />}
@@ -1243,7 +1248,7 @@ export default function App() {
             {view === 'notifications' && <NotificationsView notifications={notifications} isDarkMode={isDarkMode} />}
             {view === 'academic-support' && <AcademicSupport user={user} isDarkMode={isDarkMode} />}
             {view === 'payments' && <Payments user={user} isDarkMode={isDarkMode} />}
-            {view === 'mentorship' && <Mentorship user={user} isDarkMode={isDarkMode} mentors={mentors} fetchMentors={fetchMentors} fetchUsers={fetchUsers} activeModal={activeModal} setActiveModal={setActiveModal} />}
+            {view === 'mentorship' && <Mentorship user={user} isDarkMode={isDarkMode} mentors={mentors} fetchMentors={fetchMentors} fetchUsers={fetchUsers} fetchNotifications={fetchNotifications} activeModal={activeModal} setActiveModal={setActiveModal} />}
             {view === 'resources' && <Resources user={user} isDarkMode={isDarkMode} resources={resources} fetchResources={fetchResources} activeModal={activeModal} setActiveModal={setActiveModal} />}
             {view === 'community' && <Community user={user} isDarkMode={isDarkMode} events={communityEvents} orgs={communityOrgs} fetchCommunityData={fetchCommunityData} activeModal={activeModal} setActiveModal={setActiveModal} />}
             {view === 'settings' && <SettingsView user={user} isDarkMode={isDarkMode} />}
@@ -1686,6 +1691,40 @@ function StudentDashboard({
                 )}
               </div>
 
+              {user.mentorId && (
+                <div className={cn(
+                  "p-8 rounded-[2.5rem] border transition-all",
+                  isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                )}>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold">Mentor Sessions</h3>
+                    <button 
+                      onClick={() => setView('mentorship')}
+                      className="text-xs font-black uppercase tracking-widest text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      Book New →
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className={cn(
+                      "p-6 rounded-2xl border flex items-center justify-between",
+                      isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+                    )}>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-red-600/10 flex items-center justify-center text-red-600">
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm">Next Session</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Scheduled with your mentor</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">TBD</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className={cn(
                 "p-8 rounded-[2.5rem] border transition-all",
                 isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
@@ -1846,20 +1885,103 @@ function StudentDashboard({
   );
 }
 
-const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUsers, facultyUser }: { isDarkMode: boolean, setView: (view: string) => void, setGradeEntryFilter: (filter: string) => void, users: UserData[], fetchUsers: () => void, facultyUser: UserData }) => {
+const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUsers, facultyUser, courses, fetchCourses, isAdmin }: { isDarkMode: boolean, setView: (view: string) => void, setGradeEntryFilter: (filter: string) => void, users: UserData[], fetchUsers: () => void, facultyUser: UserData, courses: any[], fetchCourses: () => void, isAdmin: boolean }) => {
   const [showClassList, setShowClassList] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<any | null>(null);
+  const [newCourse, setNewCourse] = useState({ 
+    id: '', 
+    name: '', 
+    days: 'Mon/Wed', 
+    startTime: '08:00 AM', 
+    endTime: '09:30 AM', 
+    location: '', 
+    instructor: '' 
+  });
 
-  const isAdmin = facultyUser.role === 'admin';
+  const handleAddCourse = async () => {
+    // If we are calling this from the modal, we use the form data.
+    // If not, we use defaults.
+    const isFromModal = showAddCourseModal;
+    
+    const finalId = (isFromModal && newCourse.id) ? newCourse.id : `CRSE-${Math.floor(1000 + Math.random() * 9000)}`;
+    const finalName = (isFromModal && newCourse.name) ? newCourse.name : 'New Course';
 
-  const courses = [
-    { id: 'IT101', name: 'Introduction to Computing', schedule: 'Mon/Wed 8:00 AM - 9:30 AM', students: 45, day: 'Monday', time: '08:00 AM', location: 'Lab 1' },
-    { id: 'IT102', name: 'Computer Programming 1', schedule: 'Tue/Thu 10:00 AM - 12:00 PM', students: 38, day: 'Tuesday', time: '10:00 AM', location: 'Lab 2' },
-    { id: 'IT201', name: 'Data Structures and Algorithms', schedule: 'Fri 1:00 PM - 4:00 PM', students: 42, day: 'Friday', time: '01:00 PM', location: 'Lab 3' },
-  ];
+    setIsAdding(true);
+    
+    try {
+      const courseData: any = {
+        id: finalId,
+        name: finalName,
+        schedule: `${newCourse.days} ${newCourse.startTime} - ${newCourse.endTime}`,
+        location: newCourse.location || 'TBA',
+        instructor: newCourse.instructor || 'Not Assigned',
+        students: 0,
+        day: newCourse.days,
+        time: `${newCourse.startTime} - ${newCourse.endTime}`
+      };
+
+      console.log('Attempting to save course:', courseData);
+
+      if (editingCourse) {
+        const { error } = await supabase
+          .from('courses')
+          .update(courseData)
+          .eq('id', editingCourse.id);
+        
+        if (!error) {
+          await fetchCourses();
+          setShowAddCourseModal(false);
+          setEditingCourse(null);
+          setNewCourse({ id: '', name: '', days: 'Mon/Wed', startTime: '08:00 AM', endTime: '09:30 AM', location: '', instructor: '' });
+        } else {
+          console.error('Supabase update error:', error);
+          alert(`Error: ${error.message} (Code: ${error.code})`);
+        }
+      } else {
+        const { error } = await supabase.from('courses').insert(courseData);
+        if (!error) {
+          await fetchCourses();
+          setShowAddCourseModal(false);
+          setNewCourse({ id: '', name: '', days: 'Mon/Wed', startTime: '08:00 AM', endTime: '09:30 AM', location: '', instructor: '' });
+          if (!isFromModal) {
+            alert('New course added! You can now edit it to change details.');
+          }
+        } else {
+          console.error('Supabase insert error:', error);
+          if (error.code === '23505') {
+            alert('Error: This Course ID is already taken. Please use a unique ID.');
+          } else {
+            alert(`Error: ${error.message} (Code: ${error.code})`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      alert('An unexpected error occurred. Please check your internet connection.');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!confirm(`Are you sure you want to delete course ${courseId}?`)) return;
+    
+    const { error } = await supabase
+      .from('courses')
+      .delete()
+      .eq('id', courseId);
+    
+    if (!error) {
+      fetchCourses();
+      alert('Course deleted successfully!');
+    } else {
+      alert('Error deleting course: ' + error.message);
+    }
+  };
 
   const students = users.filter(u => u.role === 'student');
   const filteredStudents = students.filter(s => 
@@ -1873,7 +1995,7 @@ const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUse
     
     const newScheduleEntry = {
       subject: selectedCourse.id,
-      instructor: facultyUser.name,
+      instructor: selectedCourse.instructor || 'Not Assigned',
       day: selectedCourse.day,
       time: selectedCourse.time,
       location: selectedCourse.location
@@ -1903,6 +2025,18 @@ const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUse
     setIsAdding(false);
   };
 
+  const annexRooms = Array.from({ length: 10 }, (_, f) => 
+    Array.from({ length: 6 }, (_, r) => `${(f + 1) * 100 + (r + 1)} Annex`)
+  ).flat();
+
+  const campusRooms = Array.from({ length: 6 }, (_, f) => 
+    Array.from({ length: 5 }, (_, r) => `${(f + 1) * 100 + (r + 1)} Campus`)
+  ).flat();
+
+  const allRooms = [...annexRooms, ...campusRooms];
+
+  const filteredCourses = isAdmin ? courses : courses.filter(c => c.instructor === facultyUser.name);
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       <header className="flex justify-between items-end">
@@ -1914,17 +2048,18 @@ const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUse
         </div>
         {isAdmin && (
           <button 
-            onClick={() => setShowAddCourseModal(true)}
-            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2"
+            onClick={handleAddCourse}
+            disabled={isAdding}
+            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all flex items-center gap-2 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
-            Add Course
+            {isAdding ? 'Adding...' : 'Add Course'}
           </button>
         )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {courses.map((course, i) => (
+        {filteredCourses.map((course, i) => (
           <div key={i} className={cn(
             "p-8 rounded-[2.5rem] border transition-all hover:scale-[1.02]",
             isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
@@ -1932,9 +2067,51 @@ const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUse
             <div className="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center text-white mb-6">
               <Book className="w-6 h-6" />
             </div>
+            <div className="absolute top-8 right-8 flex gap-2">
+              {isAdmin && (
+                <>
+                  <button 
+                    onClick={() => {
+                      setEditingCourse(course);
+                      // Parse the schedule string: "Mon/Wed 08:00 AM - 09:30 AM"
+                      const schedule = course.schedule || "";
+                      const parts = schedule.split(' ');
+                      
+                      const days = parts[0] || 'Mon/Wed';
+                      const startTime = parts.length >= 3 ? `${parts[1]} ${parts[2]}` : '08:00 AM';
+                      const endTime = parts.length >= 6 ? `${parts[4]} ${parts[5]}` : '09:30 AM';
+
+                      setNewCourse({
+                        id: course.id,
+                        name: course.name,
+                        days: days,
+                        startTime: startTime,
+                        endTime: endTime,
+                        location: course.location || '',
+                        instructor: course.instructor || ''
+                      });
+                      setShowAddCourseModal(true);
+                    }}
+                    className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteCourse(course.id)}
+                    className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
             <h3 className="text-xl font-bold mb-2">{course.name}</h3>
             <p className="text-xs font-black text-red-600 uppercase tracking-widest mb-4">{course.id}</p>
             <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <User className="w-4 h-4" />
+                <span>Instructor: <span className="font-bold">{course.instructor || 'Not Assigned'}</span></span>
+              </div>
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Clock className="w-4 h-4" />
                 <span>{course.schedule}</span>
@@ -1977,14 +2154,114 @@ const CoursesView = ({ isDarkMode, setView, setGradeEntryFilter, users, fetchUse
         {showAddCourseModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white dark:bg-[#111111] rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-white/5">
-              <h3 className="text-2xl font-black mb-6">Add New Course</h3>
+              <h3 className="text-2xl font-black mb-6">{editingCourse ? 'Edit Course' : 'Add New Course'}</h3>
               <div className="space-y-4">
-                <input type="text" placeholder="Course ID (e.g. IT101)" className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" />
-                <input type="text" placeholder="Course Name" className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" />
-                <input type="text" placeholder="Schedule" className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" />
+                <input 
+                  type="text" 
+                  placeholder="Course ID (e.g. IT101)" 
+                  value={newCourse.id}
+                  disabled={!!editingCourse}
+                  onChange={e => setNewCourse({...newCourse, id: e.target.value})}
+                  className={cn("w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600", editingCourse && "opacity-50 cursor-not-allowed")} 
+                />
+                <input 
+                  type="text" 
+                  placeholder="Course Name" 
+                  value={newCourse.name}
+                  onChange={e => setNewCourse({...newCourse, name: e.target.value})}
+                  className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" 
+                />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Days</label>
+                    <select 
+                      value={newCourse.days}
+                      onChange={e => setNewCourse({...newCourse, days: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 font-bold"
+                    >
+                      <option>Mon/Wed</option>
+                      <option>Tue/Thu</option>
+                      <option>Friday</option>
+                      <option>Saturday</option>
+                      <option>Mon/Wed/Fri</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Location</label>
+                    <select 
+                      value={newCourse.location}
+                      onChange={e => setNewCourse({...newCourse, location: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 font-bold"
+                    >
+                      <option value="">Select Room</option>
+                      <optgroup label="Annex Building (10 Floors)">
+                        {annexRooms.map(room => (
+                          <option key={room} value={room}>{room}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Main Campus (6 Floors)">
+                        {campusRooms.map(room => (
+                          <option key={room} value={room}>{room}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Start Time</label>
+                    <select 
+                      value={newCourse.startTime}
+                      onChange={e => setNewCourse({...newCourse, startTime: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 font-bold"
+                    >
+                      {['07:30 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'].map(t => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">End Time</label>
+                    <select 
+                      value={newCourse.endTime}
+                      onChange={e => setNewCourse({...newCourse, endTime: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 font-bold"
+                    >
+                      {['09:00 AM', '09:30 AM', '10:30 AM', '11:30 AM', '12:30 PM', '01:30 PM', '02:30 PM', '03:30 PM', '04:30 PM', '05:30 PM', '06:30 PM'].map(t => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Instructor</label>
+                    <select 
+                      value={newCourse.instructor}
+                      onChange={e => setNewCourse({...newCourse, instructor: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 font-bold"
+                    >
+                      <option value="">Not Assigned</option>
+                      {users.filter(u => u.role === 'faculty').map(f => (
+                        <option key={f.id} value={f.name}>{f.name}</option>
+                      ))}
+                    </select>
+                </div>
                 <div className="flex gap-4 pt-4">
-                  <button onClick={() => setShowAddCourseModal(false)} className="flex-1 py-4 bg-slate-100 dark:bg-white/5 rounded-2xl font-bold">Cancel</button>
-                  <button onClick={() => { alert('Course added successfully!'); setShowAddCourseModal(false); }} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black">Add Course</button>
+                  <button onClick={() => {
+                    setShowAddCourseModal(false);
+                    setEditingCourse(null);
+                    setNewCourse({ id: '', name: '', days: 'Mon/Wed', startTime: '08:00 AM', endTime: '09:30 AM', location: '', instructor: '' });
+                  }} className="flex-1 py-4 bg-slate-100 dark:bg-white/5 rounded-2xl font-bold">Cancel</button>
+                  <button 
+                    onClick={handleAddCourse} 
+                    disabled={isAdding}
+                    className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black disabled:opacity-50"
+                  >
+                    {isAdding ? 'Processing...' : (editingCourse ? 'Update Course' : 'Add Course')}
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -2107,7 +2384,7 @@ const GradeEntryView = ({ users, isDarkMode, facultyUser, fetchUsers, initialFil
     if (!error) {
       fetchUsers();
       setShowModal(false);
-      setNewGrade({ subject: '', instructor: facultyUser.name, grade: '' });
+      setNewGrade({ subject: '', instructor: facultyUser.name, grade: '', semester: '1st Semester 2024-2025' });
       setSelectedStudent(null);
     }
   };
@@ -2212,6 +2489,15 @@ const GradeEntryView = ({ users, isDarkMode, facultyUser, fetchUsers, initialFil
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Instructor</label>
+                    <input 
+                      type="text"
+                      value={newGrade.instructor}
+                      disabled
+                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold opacity-60", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject</label>
                     <input 
                       type="text"
@@ -2223,24 +2509,38 @@ const GradeEntryView = ({ users, isDarkMode, facultyUser, fetchUsers, initialFil
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grade</label>
-                    <input 
-                      type="text"
+                    <select 
                       value={newGrade.grade}
                       onChange={e => setNewGrade({...newGrade, grade: e.target.value})}
-                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
-                      placeholder="e.g. 1.0 or A"
-                    />
+                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold appearance-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+                    >
+                      <option value="">Select Grade</option>
+                      <option value="1.0">1.0 (Excellent)</option>
+                      <option value="1.25">1.25 (Superior)</option>
+                      <option value="1.5">1.5 (Very Good)</option>
+                      <option value="1.75">1.75 (Good)</option>
+                      <option value="2.0">2.0 (Satisfactory)</option>
+                      <option value="2.25">2.25 (Fair)</option>
+                      <option value="2.5">2.5 (Passing)</option>
+                      <option value="2.75">2.75 (Below Average)</option>
+                      <option value="3.0">3.0 (Lowest Passing)</option>
+                      <option value="5.0">5.0 (Failed)</option>
+                      <option value="INC">INC (Incomplete)</option>
+                      <option value="W">W (Withdrawn)</option>
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Semester</label>
                     <select 
                       value={newGrade.semester}
                       onChange={e => setNewGrade({...newGrade, semester: e.target.value})}
-                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+                      className={cn("w-full p-4 rounded-2xl border outline-none font-bold appearance-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
                     >
                       <option>1st Semester 2024-2025</option>
-                      <option>2nd Semester 2023-2024</option>
+                      <option>2nd Semester 2024-2025</option>
+                      <option>Summer 2024-2025</option>
                       <option>1st Semester 2023-2024</option>
+                      <option>2nd Semester 2023-2024</option>
                       <option>Summer 2023-2024</option>
                     </select>
                   </div>
@@ -2650,12 +2950,25 @@ function FacultyDashboard({
                       onChange={e => setNewGrade({...newGrade, subject: e.target.value})}
                       className={cn("p-3 rounded-xl border text-sm font-bold outline-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200")}
                     />
-                    <input 
-                      placeholder="Grade (e.g. 1.0, A)"
+                    <select 
                       value={newGrade.grade}
                       onChange={e => setNewGrade({...newGrade, grade: e.target.value})}
-                      className={cn("p-3 rounded-xl border text-sm font-bold outline-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200")}
-                    />
+                      className={cn("p-3 rounded-xl border text-sm font-bold outline-none appearance-none", isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200")}
+                    >
+                      <option value="">Grade</option>
+                      <option value="1.0">1.0</option>
+                      <option value="1.25">1.25</option>
+                      <option value="1.5">1.5</option>
+                      <option value="1.75">1.75</option>
+                      <option value="2.0">2.0</option>
+                      <option value="2.25">2.25</option>
+                      <option value="2.5">2.5</option>
+                      <option value="2.75">2.75</option>
+                      <option value="3.0">3.0</option>
+                      <option value="5.0">5.0</option>
+                      <option value="INC">INC</option>
+                      <option value="W">W</option>
+                    </select>
                     <button 
                       onClick={handleAddGrade}
                       className="bg-red-600 text-white font-black rounded-xl py-3 hover:bg-red-700 transition-all"
@@ -3642,13 +3955,19 @@ function SearchResults({ results, query, isDarkMode }: { results: any, query: st
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Users Section */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Users ({results.users.length})
-            </h3>
+          <div className={cn(
+            "p-6 rounded-[2.5rem] border flex flex-col gap-6",
+            isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+          )}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                <Users className="w-4 h-4 text-red-600" />
+                Users
+              </h3>
+              <span className="px-2 py-1 bg-red-600/10 text-red-600 rounded-lg text-[10px] font-black">{results.users.length}</span>
+            </div>
             <div className="space-y-3">
-              {results.users.map((u: any) => (
+              {results.users.length > 0 ? results.users.map((u: any) => (
                 <div key={u.id} className={cn(
                   "p-4 rounded-2xl border transition-all hover:scale-[1.02]",
                   isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
@@ -3667,18 +3986,26 @@ function SearchResults({ results, query, isDarkMode }: { results: any, query: st
                     </div>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-xs text-slate-400 italic text-center py-4">No users found</p>
+              )}
             </div>
           </div>
 
           {/* Announcements Section */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <Megaphone className="w-4 h-4" />
-              Announcements ({results.announcements.length})
-            </h3>
+          <div className={cn(
+            "p-6 rounded-[2.5rem] border flex flex-col gap-6",
+            isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+          )}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-blue-600" />
+                Announcements
+              </h3>
+              <span className="px-2 py-1 bg-blue-600/10 text-blue-600 rounded-lg text-[10px] font-black">{results.announcements.length}</span>
+            </div>
             <div className="space-y-3">
-              {results.announcements.map((a: any) => (
+              {results.announcements.length > 0 ? results.announcements.map((a: any) => (
                 <div key={a.id} className={cn(
                   "p-4 rounded-2xl border transition-all hover:scale-[1.02]",
                   isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
@@ -3687,18 +4014,26 @@ function SearchResults({ results, query, isDarkMode }: { results: any, query: st
                   <p className="text-xs text-slate-500 line-clamp-2">{a.content}</p>
                   <p className="text-[10px] text-red-600 font-bold mt-2 uppercase tracking-widest">{a.date}</p>
                 </div>
-              ))}
+              )) : (
+                <p className="text-xs text-slate-400 italic text-center py-4">No announcements found</p>
+              )}
             </div>
           </div>
 
           {/* Applications Section */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Applications ({results.applications.length})
-            </h3>
+          <div className={cn(
+            "p-6 rounded-[2.5rem] border flex flex-col gap-6",
+            isDarkMode ? "bg-white/5 border-white/5" : "bg-slate-50 border-slate-100"
+          )}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-600" />
+                Applications
+              </h3>
+              <span className="px-2 py-1 bg-emerald-600/10 text-emerald-600 rounded-lg text-[10px] font-black">{results.applications.length}</span>
+            </div>
             <div className="space-y-3">
-              {results.applications.map((app: any) => (
+              {results.applications.length > 0 ? results.applications.map((app: any) => (
                 <div key={app.id} className={cn(
                   "p-4 rounded-2xl border transition-all hover:scale-[1.02]",
                   isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm"
@@ -3715,7 +4050,9 @@ function SearchResults({ results, query, isDarkMode }: { results: any, query: st
                   <p className="text-xs text-slate-500">{app.studentName}</p>
                   <p className="text-[10px] text-slate-400 mt-1">{new Date(app.date).toLocaleDateString()}</p>
                 </div>
-              ))}
+              )) : (
+                <p className="text-xs text-slate-400 italic text-center py-4">No applications found</p>
+              )}
             </div>
           </div>
         </div>
@@ -4051,7 +4388,7 @@ function Schedule({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       <header>
-        <h1 className="text-4xl font-black tracking-tighter">Class Schedule</h1>
+        <h1 className="text-4xl font-black tracking-tighter">My Schedule</h1>
         <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Your personalized weekly academic timetable.</p>
       </header>
 
@@ -4286,9 +4623,27 @@ function Payments({ user, isDarkMode }: { user: UserData, isDarkMode?: boolean }
   );
 }
 
-function Mentorship({ user, isDarkMode, mentors, fetchMentors, fetchUsers, activeModal, setActiveModal }: { user: UserData, isDarkMode?: boolean, mentors: any[], fetchMentors: () => void, fetchUsers: () => void, activeModal?: string | null, setActiveModal?: (val: string | null) => void }) {
+function Mentorship({ user, isDarkMode, mentors, fetchMentors, fetchUsers, fetchNotifications, activeModal, setActiveModal }: { user: UserData, isDarkMode?: boolean, mentors: any[], fetchMentors: () => void, fetchUsers: () => void, fetchNotifications: () => void, activeModal?: string | null, setActiveModal?: (val: string | null) => void }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
+
+  const handleBookSession = async (mentor: any) => {
+    const { error } = await supabase.from('notifications').insert({
+      userId: user.id,
+      title: "Session Booked",
+      message: `You have successfully booked a mentorship session with ${mentor.name}.`,
+      type: 'success',
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!error) {
+      alert(`Session booked with ${mentor.name}! You will receive a notification with the details.`);
+      fetchNotifications();
+    } else {
+      alert('Error booking session: ' + error.message);
+    }
+  };
 
   useEffect(() => {
     if (activeModal === 'mentor') {
@@ -4356,20 +4711,31 @@ function Mentorship({ user, isDarkMode, mentors, fetchMentors, fetchUsers, activ
               <p className="text-sm font-bold">{mentor.specialty}</p>
             </div>
             {user.role === 'student' ? (
-              <button 
-                disabled={user.mentorId === mentor.id || isSelecting}
-                onClick={() => handleSelectMentor(mentor.id)}
-                className={cn(
-                  "w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all",
-                  user.mentorId === mentor.id 
-                    ? "bg-emerald-500/10 text-emerald-500 cursor-default" 
-                    : "bg-red-600 text-white shadow-lg shadow-red-600/20 hover:bg-red-500"
+              <div className="space-y-3">
+                <button 
+                  disabled={user.mentorId === mentor.id || isSelecting}
+                  onClick={() => handleSelectMentor(mentor.id)}
+                  className={cn(
+                    "w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all",
+                    user.mentorId === mentor.id 
+                      ? "bg-emerald-500/10 text-emerald-500 cursor-default" 
+                      : "bg-red-600 text-white shadow-lg shadow-red-600/20 hover:bg-red-500"
+                  )}
+                >
+                  {user.mentorId === mentor.id ? (
+                    <span className="flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Selected Mentor</span>
+                  ) : isSelecting ? 'Selecting...' : 'Select as Mentor'}
+                </button>
+                {user.mentorId === mentor.id && (
+                  <button 
+                    onClick={() => handleBookSession(mentor)}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    Book Session
+                  </button>
                 )}
-              >
-                {user.mentorId === mentor.id ? (
-                  <span className="flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Selected Mentor</span>
-                ) : isSelecting ? 'Selecting...' : 'Select as Mentor'}
-              </button>
+              </div>
             ) : (
               <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all">
                 View Profile
@@ -5379,19 +5745,171 @@ const TransactionsView = ({ isDarkMode }: any) => (
   </motion.div>
 );
 
-const EnrollmentView = ({ isDarkMode }: any) => (
-  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-    <header>
-      <h1 className="text-4xl font-black tracking-tighter uppercase">Course Enrollment</h1>
-      <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Manage student enrollments and course assignments.</p>
-    </header>
-    <div className={cn("p-12 rounded-[3rem] border text-center", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
-      <UserPlus className="w-16 h-16 text-red-600 mx-auto mb-6" />
-      <h3 className="text-2xl font-black mb-2">Enrollment Management</h3>
-      <p className="text-slate-500 max-w-md mx-auto">Process new enrollments, manage waitlists, and assign students to specific course sections.</p>
-    </div>
-  </motion.div>
-);
+const EnrollmentView = ({ isDarkMode, users, courses, fetchUsers }: { isDarkMode: boolean, users: UserData[], courses: any[], fetchUsers: () => void }) => {
+  const [selectedStudent, setSelectedStudent] = useState<UserData | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const students = users.filter(u => u.role === 'student');
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleEnroll = async () => {
+    if (!selectedStudent || !selectedCourse) {
+      alert('Please select both a student and a course.');
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    const newScheduleEntry = {
+      subject: selectedCourse.id,
+      instructor: selectedCourse.instructor || 'Staff',
+      day: selectedCourse.day,
+      time: selectedCourse.time,
+      location: selectedCourse.location
+    };
+
+    // Check if already in schedule
+    const alreadyEnrolled = (selectedStudent.schedule || []).some((s: any) => s.subject === selectedCourse.id);
+    if (alreadyEnrolled) {
+      alert('Student is already enrolled in this subject.');
+      setIsProcessing(false);
+      return;
+    }
+
+    const updatedSchedule = [...(selectedStudent.schedule || []), newScheduleEntry];
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ schedule: updatedSchedule })
+      .eq('id', selectedStudent.id);
+    
+    if (!error) {
+      fetchUsers();
+      alert(`Successfully enrolled ${selectedStudent.name} in ${selectedCourse.id}`);
+      setSelectedCourse(null);
+    } else {
+      alert('Error enrolling student: ' + error.message);
+    }
+    setIsProcessing(false);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tighter uppercase">Course Enrollment</h1>
+        <p className={isDarkMode ? "text-slate-400" : "text-slate-500"}>Manage student enrollments and course assignments.</p>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Student Selection */}
+        <div className={cn("p-8 rounded-[2.5rem] border flex flex-col gap-6", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold">1. Select Student</h3>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text"
+                placeholder="Search students..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className={cn("pl-10 pr-4 py-2 rounded-xl text-xs font-bold outline-none border", isDarkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            {filteredStudents.map(student => (
+              <button 
+                key={student.id}
+                onClick={() => setSelectedStudent(student)}
+                className={cn(
+                  "w-full p-4 rounded-2xl border flex items-center justify-between transition-all",
+                  selectedStudent?.id === student.id 
+                    ? "bg-red-600 border-red-600 text-white" 
+                    : isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-slate-50 border-slate-100 hover:bg-slate-100"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center font-bold", selectedStudent?.id === student.id ? "bg-white/20" : "bg-red-600 text-white")}>
+                    {student.name[0]}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-sm">{student.name}</p>
+                    <p className={cn("text-[10px] uppercase tracking-widest", selectedStudent?.id === student.id ? "text-white/60" : "text-slate-400")}>{student.id}</p>
+                  </div>
+                </div>
+                {selectedStudent?.id === student.id && <CheckCircle className="w-5 h-5" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Course Selection */}
+        <div className={cn("p-8 rounded-[2.5rem] border flex flex-col gap-6", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
+          <h3 className="text-xl font-bold">2. Select Course</h3>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            {courses.map(course => (
+              <button 
+                key={course.id}
+                onClick={() => setSelectedCourse(course)}
+                className={cn(
+                  "w-full p-4 rounded-2xl border flex items-center justify-between transition-all",
+                  selectedCourse?.id === course.id 
+                    ? "bg-slate-900 border-slate-900 text-white" 
+                    : isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-slate-50 border-slate-100 hover:bg-slate-100"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center font-bold", selectedCourse?.id === course.id ? "bg-white/20" : "bg-slate-900 text-white")}>
+                    <Book className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-sm">{course.name}</p>
+                    <p className={cn("text-[10px] uppercase tracking-widest", selectedCourse?.id === course.id ? "text-white/60" : "text-slate-400")}>{course.id} • {course.schedule}</p>
+                  </div>
+                </div>
+                {selectedCourse?.id === course.id && <CheckCircle className="w-5 h-5" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Summary & Action */}
+      <div className={cn("p-8 rounded-[2.5rem] border flex flex-col md:flex-row items-center justify-between gap-6", isDarkMode ? "bg-[#111111] border-white/5" : "bg-white border-slate-200 shadow-sm")}>
+        <div className="flex items-center gap-6">
+          <div className="text-center md:text-left">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Student</p>
+            <p className="font-bold">{selectedStudent ? selectedStudent.name : 'Not selected'}</p>
+          </div>
+          <div className="w-px h-10 bg-slate-100 dark:bg-white/5 hidden md:block" />
+          <div className="text-center md:text-left">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Course</p>
+            <p className="font-bold">{selectedCourse ? selectedCourse.name : 'Not selected'}</p>
+          </div>
+        </div>
+        <button 
+          disabled={!selectedStudent || !selectedCourse || isProcessing}
+          onClick={handleEnroll}
+          className={cn(
+            "px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all flex items-center gap-2",
+            (!selectedStudent || !selectedCourse || isProcessing)
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+              : "bg-red-600 text-white shadow-lg shadow-red-600/20 hover:bg-red-500"
+          )}
+        >
+          {isProcessing ? 'Processing...' : 'Confirm Enrollment'}
+          <UserPlus className="w-5 h-5" />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
 const GradesMgmtView = ({ users, isDarkMode, fetchUsers, initialFilter }: { users: UserData[], isDarkMode: boolean, fetchUsers: () => void, initialFilter?: string }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -5627,23 +6145,39 @@ const GradesMgmtView = ({ users, isDarkMode, fetchUsers, initialFilter }: { user
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Instructor</label>
-                  <input 
-                    type="text" 
+                  <select 
                     value={gradeForm.instructor}
                     onChange={e => setGradeForm({...gradeForm, instructor: e.target.value})}
-                    className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" 
-                  />
+                    className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 font-bold"
+                  >
+                    <option value="">Select Instructor</option>
+                    {users.filter(u => u.role === 'faculty').map(f => (
+                      <option key={f.id} value={f.name}>{f.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Grade</label>
-                    <input 
-                      type="text" 
+                    <select 
                       value={gradeForm.grade}
                       onChange={e => setGradeForm({...gradeForm, grade: e.target.value})}
-                      placeholder="e.g. 1.25"
-                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600" 
-                    />
+                      className="w-full p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-600 appearance-none"
+                    >
+                      <option value="">Select Grade</option>
+                      <option value="1.0">1.0 (Excellent)</option>
+                      <option value="1.25">1.25 (Superior)</option>
+                      <option value="1.5">1.5 (Very Good)</option>
+                      <option value="1.75">1.75 (Good)</option>
+                      <option value="2.0">2.0 (Satisfactory)</option>
+                      <option value="2.25">2.25 (Fair)</option>
+                      <option value="2.5">2.5 (Passing)</option>
+                      <option value="2.75">2.75 (Below Average)</option>
+                      <option value="3.0">3.0 (Lowest Passing)</option>
+                      <option value="5.0">5.0 (Failed)</option>
+                      <option value="INC">INC (Incomplete)</option>
+                      <option value="W">W (Withdrawn)</option>
+                    </select>
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Semester</label>
